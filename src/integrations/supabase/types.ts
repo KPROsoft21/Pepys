@@ -584,6 +584,7 @@ export type Database = {
           entry_date: string
           id: string
           original_text: string
+          search_tsv: unknown
           source_id: string | null
           subject_id: string
         }
@@ -596,6 +597,7 @@ export type Database = {
           entry_date: string
           id?: string
           original_text: string
+          search_tsv?: unknown
           source_id?: string | null
           subject_id: string
         }
@@ -608,6 +610,7 @@ export type Database = {
           entry_date?: string
           id?: string
           original_text?: string
+          search_tsv?: unknown
           source_id?: string | null
           subject_id?: string
         }
@@ -1765,7 +1768,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_diary_entries: {
+        Args: {
+          _cutoff: string
+          _limit?: number
+          _query: string
+          _subject_id: string
+        }
+        Returns: {
+          date_label: string
+          entry_date: string
+          id: string
+          original_text: string
+          relevance: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
