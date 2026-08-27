@@ -140,6 +140,15 @@ export function parseVolume(raw: string, year: number): ParsedEntry[] {
     const closes = (line.match(/\]/g) ?? []).length;
 
     const atMargin = bracketDepth === 0 && !line.startsWith(" ");
+    const section = atMargin ? SECTION_RE.exec(line) : null;
+    if (section) {
+      flush();
+      sawFirstEntry = true;
+      openMonth =
+        MONTHS.findIndex((m) => m.toUpperCase() === section[1]) + 1 || openMonth;
+      bracketDepth = 0;
+      continue;
+    }
     const monthHead = atMargin ? MONTH_HEAD_RE.exec(line) : null;
     const dayHead = !monthHead && atMargin && openMonth ? DAY_HEAD_RE.exec(line) : null;
 
