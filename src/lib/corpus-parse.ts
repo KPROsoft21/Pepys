@@ -1,0 +1,154 @@
+/**
+ * Diary corpus parser.
+ *
+ * Turns a Project Gutenberg (Wheatley edition) yearly volume into dated
+ * entries. The parser only *segments and cleans editorial apparatus* — it
+ * never rewrites Pepys's own words. Two classes of text are removed and
+ * recorded as such:
+ *   1. Project Gutenberg's licence header/footer.
+ *   2. Wheatley's editorial footnotes (indented bracketed blocks and inline
+ *      `--[ ... ]--` interpolations), which are not the diarist's text.
+ */
+
+export const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+export const GUTENBERG_VOLUMES: Record<number, number> = {
+  1660: 4125,
+  1661: 4131,
+  1662: 4138,
+  1663: 4145,
+  1664: 4153,
+  1665: 4162,
+  1666: 4171,
+  1667: 4184,
+  1668: 4195,
+  1669: 4199,
+};
+
+export type ParsedEntry = {
+  entry_date: string; // ISO yyyy-mm-dd (New Style year as printed on the volume)
+  date_label: string; // e.g. "Saturday 1 January 1660"
+  original_text: string;
+  char_count: number;
+};
+
+const HEAD_RE = new RegExp(`^(${MONTHS.join("|")})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\.\\s*(.*)$`);
+
+function stripGutenbergWrapper(raw: string): string {
+  const start = raw.search(/\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG/i);
+  const end = raw.search(/\*\*\*\s*END OF (THE|THIS) PROJECT GUTENBERG/i);
+  let body = raw;
+  if (start >= 0) body = body.slice(raw.indexOf("\n", start) + 1);
+  if (end >= 0) {
+    const cut = body.search(/\*\*\*\s*END OF (THE|THIS) PROJECT GUTENBERG/i);
+    if (cut >= 0) body = body.slice(0, cut);
+  }
+  return body;
+}
+
+/** Drops Wheatley's footnotes: inline `--[ ... ]--` and indented `[ ... ]` blocks. */
+export function stripEditorialApparatus(text: string): string {
+  let out = "";
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === "[") {
+      depth++;
+      continue;
+    }
+    if (ch === "]") {
+      if (depth > 0) depth--;
+      continue;
+    }
+    if (depth === 0) out += ch;
+  }
+  return out
+    .replace(/--\s*--/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function iso(year: number, month: number, day: number): string | null {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function weekday(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * `year` is the New Style year printed on the volume ("Complete 1663 N.S."),
+ * so January entries already belong to that year — no Old Style shift needed.
+ */
+export function parseVolume(raw: string, year: number): ParsedEntry[] {
+  const body = stripGutenbergWrapper(raw);
+  const lines = body.split(/\r?\n/);
+
+  const entries: ParsedEntry[] = [];
+  let current: { month: number; day: number; buf: string[] } | null = null;
+  let bracketDepth = 0;
+  let sawFirstEntry = false;
+
+  const flush = () => {
+    if (!current) return;
+    const date = iso(year, current.month, current.day);
+    const text = stripEditorialApparatus(current.buf.join("\n"));
+    current = null;
+    if (!date || text.length < 40) return;
+    entries.push({
+      entry_date: date,
+      date_label: `${weekday(date)} ${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]} ${year}`,
+      original_text: text,
+      char_count: text.length,
+    });
+  };
+
+  for (const line of lines) {
+    // Track bracket nesting so a date mentioned inside a footnote is not read
+    // as the start of a new entry.
+    const opens = (line.match(/\[/g) ?? []).length;
+    const closes = (line.match(/\]/g) ?? []).length;
+
+    const head = bracketDepth === 0 && !line.startsWith(" ") ? HEAD_RE.exec(line) : null;
+    if (head) {
+      flush();
+      sawFirstEntry = true;
+      const month = MONTHS.indexOf(head[1] as (typeof MONTHS)[number]) + 1;
+      current = { month, day: Number(head[2]), buf: [head[3] ?? ""] };
+    } else if (current && sawFirstEntry) {
+      current.buf.push(line);
+    }
+
+    bracketDepth = Math.max(0, bracketDepth + opens - closes);
+  }
+  flush();
+
+  // Deduplicate on date, keeping the longest text (volumes occasionally repeat
+  // a heading in front matter).
+  const byDate = new Map<string, ParsedEntry>();
+  for (const e of entries) {
+    const prev = byDate.get(e.entry_date);
+    if (!prev || prev.char_count < e.char_count) byDate.set(e.entry_date, e);
+  }
+  return [...byDate.values()].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+}
