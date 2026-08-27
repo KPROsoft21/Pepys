@@ -2,8 +2,6 @@
   <img src="public/pepys-logo.png" alt="PEPYS logo" width="220" />
 </p>
 
-<h1 align="center">PEPYS</h1>
-
 <p align="center"><em>Temporal personality reconstruction — a mind sealed at 31 May 1669.</em></p>
 
 ---
