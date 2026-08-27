@@ -574,6 +574,60 @@ export type Database = {
           },
         ]
       }
+      diary_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          date_label: string
+          embedding: string
+          entry_date: string
+          entry_id: string
+          id: string
+          model_version: string
+          subject_id: string
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          date_label: string
+          embedding: string
+          entry_date: string
+          entry_id: string
+          id?: string
+          model_version?: string
+          subject_id: string
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          date_label?: string
+          embedding?: string
+          entry_date?: string
+          entry_id?: string
+          id?: string
+          model_version?: string
+          subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_chunks_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_chunks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_entries: {
         Row: {
           char_count: number
@@ -1768,6 +1822,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_embedded_entries: { Args: never; Returns: number }
+      count_pending_embedding_entries: { Args: never; Returns: number }
+      hybrid_search_diary: {
+        Args: {
+          _cutoff: string
+          _embedding: string
+          _limit?: number
+          _query: string
+          _subject_id: string
+        }
+        Returns: {
+          content: string
+          date_label: string
+          entry_date: string
+          id: string
+          lexical_rank: number
+          relevance: number
+          similarity: number
+        }[]
+      }
+      pending_embedding_entries: {
+        Args: { _limit?: number }
+        Returns: {
+          date_label: string
+          entry_date: string
+          id: string
+          original_text: string
+          subject_id: string
+        }[]
+      }
       search_diary_entries: {
         Args: {
           _cutoff: string
