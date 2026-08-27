@@ -5,9 +5,6 @@ import { SUBJECT_SLUG } from "./subject.server";
 
 const CORPUS_VERSION = "wheatley-gutenberg-1";
 
-/** Supplementary volumes: the "Complete 1660 N.S." volume omits January 1660. */
-const SUPPLEMENTS: Record<number, number[]> = { 1660: [4118] };
-
 export const CORPUS_YEARS = Object.keys(GUTENBERG_VOLUMES)
   .map(Number)
   .sort((a, b) => a - b);
@@ -73,11 +70,7 @@ export async function ingestYear(
     .maybeSingle();
   const cutoff: string = state?.cutoff_date ?? `${subject.cutoff_year}-12-31`;
 
-  const ids = [volumeId, ...(SUPPLEMENTS[year] ?? [])];
-  const parsed: ParsedEntry[] = [];
-  for (const id of ids) {
-    parsed.push(...parseVolume(await fetchVolume(id), year));
-  }
+  const parsed: ParsedEntry[] = parseVolume(await fetchVolume(volumeId), year);
 
   const byDate = new Map<string, ParsedEntry>();
   for (const entry of parsed) {
@@ -144,29 +137,68 @@ export async function corpusStatus(supabase: SupabaseClient): Promise<CorpusStat
     .single();
   if (!subject) throw new Error("Subject not found");
 
-  const { data } = await supabase
-    .from("diary_entries")
-    .select("entry_date,char_count")
-    .eq("subject_id", subject.id)
-    .eq("corpus_version", CORPUS_VERSION)
-    .order("entry_date");
+  const base = () =>
+    supabase
+      .from("diary_entries")
+      .select("entry_date", { count: "exact", head: true })
+      .eq("subject_id", subject.id)
+      .eq("corpus_version", CORPUS_VERSION);
 
-  const rows = (data ?? []) as { entry_date: string; char_count: number }[];
-  const counts = new Map<number, number>();
-  for (const row of rows) {
-    const y = Number(row.entry_date.slice(0, 4));
-    counts.set(y, (counts.get(y) ?? 0) + 1);
+  const perYear = await Promise.all(
+    CORPUS_YEARS.map(async (year) => {
+      const { count } = await base()
+        .gte("entry_date", `${year}-01-01`)
+        .lte("entry_date", `${year}-12-31`);
+      return { year, entries: count ?? 0 };
+    }),
+  );
+
+  const [{ count: totalEntries }, first, last] = await Promise.all([
+    base(),
+    supabase
+      .from("diary_entries")
+      .select("entry_date")
+      .eq("subject_id", subject.id)
+      .eq("corpus_version", CORPUS_VERSION)
+      .order("entry_date")
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("diary_entries")
+      .select("entry_date")
+      .eq("subject_id", subject.id)
+      .eq("corpus_version", CORPUS_VERSION)
+      .order("entry_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  // Characters are summed per year page to stay under the Data API row cap.
+  let totalCharacters = 0;
+  for (const { year, entries } of perYear) {
+    if (!entries) continue;
+    for (let offset = 0; offset < entries; offset += 500) {
+      const { data } = await supabase
+        .from("diary_entries")
+        .select("char_count")
+        .eq("subject_id", subject.id)
+        .eq("corpus_version", CORPUS_VERSION)
+        .gte("entry_date", `${year}-01-01`)
+        .lte("entry_date", `${year}-12-31`)
+        .order("entry_date")
+        .range(offset, offset + 499);
+      for (const row of (data ?? []) as { char_count: number }[]) {
+        totalCharacters += row.char_count;
+      }
+    }
   }
 
   return {
-    totalEntries: rows.length,
-    totalCharacters: rows.reduce((a, b) => a + b.char_count, 0),
-    firstEntry: rows[0]?.entry_date ?? null,
-    lastEntry: rows.at(-1)?.entry_date ?? null,
-    years: CORPUS_YEARS.filter((y) => counts.has(y)).map((y) => ({
-      year: y,
-      entries: counts.get(y) ?? 0,
-    })),
-    pendingYears: CORPUS_YEARS.filter((y) => !counts.has(y)),
+    totalEntries: totalEntries ?? 0,
+    totalCharacters,
+    firstEntry: first.data?.entry_date ?? null,
+    lastEntry: last.data?.entry_date ?? null,
+    years: perYear.filter((y) => y.entries > 0),
+    pendingYears: perYear.filter((y) => y.entries === 0).map((y) => y.year),
   };
 }
