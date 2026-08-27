@@ -135,12 +135,12 @@ function ResearchMode() {
     {
       label: "Corpus ingestion (verbatim diary)",
       backing: "diary_entries, segmented by date from the Wheatley edition",
-      count: instr?.counts.entries ?? 0,
+      count: instr?.counts.diaryEntries ?? 0,
     },
     {
       label: "Hybrid retrieval (lexical + semantic)",
       backing: "diary_chunks embeddings fused with ts_rank, cutoff-bound in SQL",
-      count: instr?.counts.entries ?? 0,
+      count: instr?.counts.diaryEntries ?? 0,
     },
     {
       label: "Historical access firewall",
