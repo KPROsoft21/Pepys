@@ -131,6 +131,103 @@ export type Database = {
           },
         ]
       }
+      fork_events: {
+        Row: {
+          confidence: number
+          created_at: string
+          date_label: string | null
+          description: string | null
+          divergence: string
+          fork_id: string
+          id: string
+          title: string
+          year: number
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          date_label?: string | null
+          description?: string | null
+          divergence?: string
+          fork_id: string
+          id?: string
+          title: string
+          year: number
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          date_label?: string | null
+          description?: string | null
+          divergence?: string
+          fork_id?: string
+          id?: string
+          title?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fork_events_fork_id_fkey"
+            columns: ["fork_id"]
+            isOneToOne: false
+            referencedRelation: "forks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forks: {
+        Row: {
+          confidence: number
+          created_at: string
+          created_by: string | null
+          divergence_label: string | null
+          divergence_year: number
+          id: string
+          label: string
+          premise: string
+          self_account: string | null
+          status: string
+          subject_id: string
+          summary: string | null
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          created_by?: string | null
+          divergence_label?: string | null
+          divergence_year: number
+          id?: string
+          label: string
+          premise: string
+          self_account?: string | null
+          status?: string
+          subject_id: string
+          summary?: string | null
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          created_by?: string | null
+          divergence_label?: string | null
+          divergence_year?: number
+          id?: string
+          label?: string
+          premise?: string
+          self_account?: string | null
+          status?: string
+          subject_id?: string
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learning_log: {
         Row: {
           confidence: number | null
