@@ -10,6 +10,25 @@ export type ConsolidationResult = {
 };
 
 type Extraction = {
+  answered_question: boolean;
+  gaps: {
+    target_label: string;
+    target_type: string;
+    unexplained: string;
+    knowledge_gap: number;
+    novelty: number;
+    surprise: number;
+    emotional_salience: number;
+    goal_relevance: number;
+    contradiction_strength: number;
+    uncertainty: number;
+    questions: {
+      question: string;
+      gap_addressed: string;
+      grounded_in: string;
+      expected_information_gain: number;
+    }[];
+  }[];
   concepts: { name: string; category: string; status: string; understanding: string }[];
   memory: { title: string; content: string; impact: string; strength: number } | null;
   belief: { proposition: string; stance: string; confidence: number } | null;
@@ -56,10 +75,70 @@ const EXTRACTION_SCHEMA = {
       },
       required: ["proposition", "stance", "confidence"],
     },
+    answered_question: { type: "boolean" },
+    gaps: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          target_label: { type: "string" },
+          target_type: { type: "string", enum: ["concept", "person", "event", "claim", "object"] },
+          unexplained: { type: "string" },
+          knowledge_gap: { type: "number" },
+          novelty: { type: "number" },
+          surprise: { type: "number" },
+          emotional_salience: { type: "number" },
+          goal_relevance: { type: "number" },
+          contradiction_strength: { type: "number" },
+          uncertainty: { type: "number" },
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                question: { type: "string" },
+                gap_addressed: { type: "string" },
+                grounded_in: { type: "string" },
+                expected_information_gain: { type: "number" },
+              },
+              required: [
+                "question",
+                "gap_addressed",
+                "grounded_in",
+                "expected_information_gain",
+              ],
+            },
+          },
+        },
+        required: [
+          "target_label",
+          "target_type",
+          "unexplained",
+          "knowledge_gap",
+          "novelty",
+          "surprise",
+          "emotional_salience",
+          "goal_relevance",
+          "contradiction_strength",
+          "uncertainty",
+          "questions",
+        ],
+      },
+    },
     frontier_note: { type: "string" },
     drawn_from: { type: "array", items: { type: "string" } },
   },
-  required: ["concepts", "memory", "belief", "frontier_note", "drawn_from"],
+  required: [
+    "answered_question",
+    "gaps",
+    "concepts",
+    "memory",
+    "belief",
+    "frontier_note",
+    "drawn_from",
+  ],
 };
 
 async function extract(
@@ -67,6 +146,7 @@ async function extract(
   userMessage: string,
   reply: string,
   visitor: string,
+  pendingQuestion: string | null,
 ): Promise<Extraction | null> {
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -87,6 +167,8 @@ Rules:
 - memory: one episodic post-reconstruction memory ONLY if this exchange was notable (something learned, a shock, a strong feeling). Written in Pepys's first person. strength 0.4-0.95. Otherwise null.
 - belief: one new or revised belief ONLY if the exchange plainly changed his position. Otherwise null.
 - frontier_note: one plain sentence naming what he still does not understand after this exchange.
+- gaps: things in THIS exchange that Pepys (a Navy administrator of 1669) cannot account for. For each, give the specific unexplained element and scores in 0..1 for knowledge_gap, novelty, surprise, emotional_salience, goal_relevance, contradiction_strength, uncertainty. Do NOT score personal relevance — the system computes that from his own record. For each gap, propose 1-3 concrete candidate questions that could only arise from THIS exchange, phrased as a curious 17th-century clerk would ask (make, cost, governance, carriage, who profits, what becomes of the old way). Never propose generic questions like "tell me more" or "how does it work". Empty array if nothing is genuinely unexplained.
+- answered_question: ${pendingQuestion ? `true if the visitor's message answers the question Pepys last asked: "${pendingQuestion}". Otherwise false.` : "always false; he had no outstanding question."}
 - drawn_from: 2-4 short labels for the evidence the reply leaned on (e.g. "Diary, 2 September 1666", "Belief: music ravishes the soul", "Relationship: Elisabeth Pepys").
 The visitor is named ${visitor}.`,
         },
@@ -148,7 +230,23 @@ export async function consolidateExchange(input: {
   let drawnFrom: string[] = [];
 
   if (apiKey) {
-    const extraction = await extract(apiKey, input.userMessage, input.reply, input.visitor);
+    const { data: pending } = await supabaseAdmin
+      .from("curiosity_questions")
+      .select("id,question")
+      .eq("conversation_id", conversationId)
+      .eq("asked", true)
+      .eq("answered", false)
+      .order("asked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const extraction = await extract(
+      apiKey,
+      input.userMessage,
+      input.reply,
+      input.visitor,
+      pending?.question ?? null,
+    );
     if (extraction) {
       frontier = extraction.frontier_note || null;
       drawnFrom = extraction.drawn_from ?? [];
@@ -202,8 +300,9 @@ export async function consolidateExchange(input: {
         }
       }
 
+      let memoryId: string | null = null;
       if (extraction.memory) {
-        await supabaseAdmin.from("memories").insert({
+        const { data: insertedMemory } = await supabaseAdmin.from("memories").insert({
           subject_id: subject.id,
           conversation_id: conversationId,
           scope: "post_reconstruction",
@@ -214,7 +313,8 @@ export async function consolidateExchange(input: {
           confidence: 0.85,
           source_label: `Conversation with ${input.visitor}`,
           impact: extraction.memory.impact,
-        });
+        }).select("id").single();
+        memoryId = insertedMemory?.id ?? null;
         updates.push(`Memory formed: "${extraction.memory.title}"`);
         await supabaseAdmin.from("learning_log").insert({
           subject_id: subject.id,
@@ -247,6 +347,29 @@ export async function consolidateExchange(input: {
           confidence: extraction.belief.confidence,
         });
       }
+
+      const { recordAnswer, registerCuriosity } = await import("./curiosity.server");
+
+      if (pending?.id && extraction.answered_question) {
+        await recordAnswer(supabaseAdmin, {
+          subjectId: subject.id,
+          questionId: pending.id,
+          answer: input.userMessage,
+          memoryId,
+          conversationId,
+        });
+        updates.push(`His own question was answered: “${pending.question}”`);
+      }
+
+      // Recursive curiosity: gaps opened by the answer to his last question are
+      // recorded as children of that question, so the loop can continue.
+      const { opened } = await registerCuriosity(supabaseAdmin, {
+        subjectId: subject.id,
+        conversationId,
+        gaps: extraction.gaps ?? [],
+        parentQuestionId: extraction.answered_question ? (pending?.id ?? null) : null,
+      });
+      updates.push(...opened);
     }
   }
 
