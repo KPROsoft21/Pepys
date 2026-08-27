@@ -96,3 +96,64 @@ export const forksQuery = {
     return { forks: (forks ?? []) as Fork[], events: (events ?? []) as ForkEvent[] };
   },
 };
+
+export type CuriosityState = {
+  id: string;
+  target_label: string;
+  target_type: string;
+  curiosity_strength: number;
+  personal_relevance: number;
+  knowledge_gap: number;
+  novelty: number;
+  surprise: number;
+  contradiction_strength: number;
+  relevance_basis: string | null;
+  questions_generated: number;
+  questions_answered: number;
+  exploration_count: number;
+  resolved: boolean;
+  updated_at: string;
+};
+
+export type CuriosityQuestion = {
+  id: string;
+  curiosity_id: string;
+  question: string;
+  gap_addressed: string | null;
+  grounded_in: string | null;
+  expected_information_gain: number;
+  asked: boolean;
+  answered: boolean;
+  answer: string | null;
+  depth: number;
+  created_at: string;
+};
+
+export const curiosityQuery = {
+  queryKey: ["curiosity"],
+  queryFn: async (): Promise<{ states: CuriosityState[]; questions: CuriosityQuestion[] }> => {
+    const { data: subject } = await supabase
+      .from("subjects")
+      .select("id")
+      .eq("slug", SUBJECT_SLUG)
+      .single();
+    if (!subject) return { states: [], questions: [] };
+    const [states, questions] = await Promise.all([
+      supabase
+        .from("curiosity_states")
+        .select("*")
+        .eq("subject_id", subject.id)
+        .order("curiosity_strength", { ascending: false }),
+      supabase
+        .from("curiosity_questions")
+        .select("*")
+        .eq("subject_id", subject.id)
+        .order("created_at", { ascending: false })
+        .limit(80),
+    ]);
+    return {
+      states: (states.data ?? []) as CuriosityState[],
+      questions: (questions.data ?? []) as CuriosityQuestion[],
+    };
+  },
+};
