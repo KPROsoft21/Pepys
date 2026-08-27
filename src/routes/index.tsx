@@ -60,11 +60,58 @@ function Encounter() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openEvidence, setOpenEvidence] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns]);
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  function stopVoice() {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setSpeakingId(null);
+  }
+
+  async function speak(turnId: string, text: string) {
+    if (speakingId === turnId) {
+      stopVoice();
+      return;
+    }
+    stopVoice();
+    setLoadingVoiceId(turnId);
+    setError(null);
+    try {
+      const res = await fetch("/api/voice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "He could not be heard.");
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setSpeakingId((current) => (current === turnId ? null : current));
+      };
+      await audio.play();
+      setSpeakingId(turnId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "He could not be heard.");
+    } finally {
+      setLoadingVoiceId(null);
+    }
+  }
 
   async function send(text: string) {
     const message = text.trim();
