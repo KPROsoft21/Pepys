@@ -134,12 +134,18 @@ export function parseVolume(raw: string, year: number): ParsedEntry[] {
     const opens = (line.match(/\[/g) ?? []).length;
     const closes = (line.match(/\]/g) ?? []).length;
 
-    const head = bracketDepth === 0 && !line.startsWith(" ") ? HEAD_RE.exec(line) : null;
-    if (head) {
+    const atMargin = bracketDepth === 0 && !line.startsWith(" ");
+    const monthHead = atMargin ? MONTH_HEAD_RE.exec(line) : null;
+    const dayHead = !monthHead && atMargin && openMonth ? DAY_HEAD_RE.exec(line) : null;
+
+    if (monthHead) {
       flush();
       sawFirstEntry = true;
-      const month = MONTHS.indexOf(head[1] as (typeof MONTHS)[number]) + 1;
-      current = { month, day: Number(head[2]), buf: [head[3] ?? ""] };
+      openMonth = MONTHS.indexOf(monthHead[1] as (typeof MONTHS)[number]) + 1;
+      current = { month: openMonth, day: Number(monthHead[2]), buf: [monthHead[3] ?? ""] };
+    } else if (dayHead && Number(dayHead[1]) >= 1 && Number(dayHead[1]) <= 31) {
+      flush();
+      current = { month: openMonth!, day: Number(dayHead[1]), buf: [dayHead[2] ?? ""] };
     } else if (current && sawFirstEntry) {
       current.buf.push(line);
     }
