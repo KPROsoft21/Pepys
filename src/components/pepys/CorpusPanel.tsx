@@ -57,12 +57,17 @@ export function CorpusPanel() {
       {data?.years.length ? (
         <div className="flex flex-wrap gap-1.5">
           {data.years.map((y) => (
-            <span
+            <button
               key={y.year}
-              className="rounded-md border border-border bg-secondary/60 px-2 py-1 font-mono text-[11px]"
+              onClick={() => ingest.mutate(y.year)}
+              disabled={ingest.isPending}
+              title={`Re-ingest ${y.year} from the source volume`}
+              className="rounded-md border border-border bg-secondary/60 px-2 py-1 font-mono text-[11px] transition-colors hover:border-seal disabled:opacity-50"
             >
-              {y.year} · {y.entries}
-            </span>
+              {ingest.isPending && ingest.variables === y.year
+                ? `${y.year}…`
+                : `${y.year} · ${y.entries}`}
+            </button>
           ))}
         </div>
       ) : null}
