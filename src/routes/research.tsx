@@ -131,6 +131,60 @@ function ResearchMode() {
     },
   ];
 
+  const subsystems = [
+    {
+      label: "Corpus ingestion (verbatim diary)",
+      backing: "diary_entries, segmented by date from the Wheatley edition",
+      count: instr?.counts.diaryEntries ?? 0,
+    },
+    {
+      label: "Hybrid retrieval (lexical + semantic)",
+      backing: "diary_chunks embeddings fused with ts_rank, cutoff-bound in SQL",
+      count: instr?.counts.diaryEntries ?? 0,
+    },
+    {
+      label: "Historical access firewall",
+      backing: "access_denials rows written whenever a later entry is refused",
+      count: instr?.denials.length ?? 0,
+    },
+    {
+      label: "Leakage detection",
+      backing: "leakage_events from post-cutoff vocabulary scanned in output",
+      count: instr?.leaks.length ?? 0,
+    },
+    {
+      label: "Belief revision history",
+      backing: "belief_history rows with confidence and stance before/after",
+      count: instr?.revisions.length ?? 0,
+    },
+    {
+      label: "Contradiction recording",
+      backing: "contradictions raised instead of overwriting a held belief",
+      count: instr?.contradictions.length ?? 0,
+    },
+    {
+      label: "Memory provenance",
+      backing: "provenance_records tying each memory to its interaction",
+      count: instr?.counts.provenance ?? 0,
+    },
+    {
+      label: "Personality derivation",
+      backing: "personality_traits scored from his own records",
+      count: instr?.traits.length ?? 0,
+    },
+    {
+      label: "Curiosity engine",
+      backing: "curiosity_states and generated questions, ranked in code",
+      count: (curiosity.data?.states ?? []).length,
+    },
+    {
+      label: "Per-visitor relationships and private memory",
+      backing: "relationships rows, memory scoped to its owner",
+      count: instr?.counts.visitors ?? 0,
+    },
+  ];
+
+
   return (
     <Chrome subtitle="Research Mode">
       <main className="mx-auto max-w-6xl space-y-8 px-5 py-10">
@@ -143,7 +197,42 @@ function ResearchMode() {
           </p>
         </header>
 
+        <section className="leaf space-y-4 p-5">
+          <div>
+            <p className="small-caps-label">Build status</p>
+            <h2 className="font-display text-2xl">V4 cognitive engine — implemented</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Each subsystem below is backed by database rows, not prompt wording. &ldquo;Live&rdquo;
+              means the subsystem is wired and has written records; &ldquo;Wired, no records
+              yet&rdquo; means the code path exists but nothing has triggered it in this run.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {subsystems.map((s) => (
+              <div
+                key={s.label}
+                className="flex items-start justify-between gap-3 rounded-md border border-border/70 p-3"
+              >
+                <div>
+                  <p className="text-sm">{s.label}</p>
+                  <p className="text-xs text-muted-foreground">{s.backing}</p>
+                </div>
+                <span
+                  className={`whitespace-nowrap rounded-sm px-2 py-0.5 font-mono text-[10px] ${
+                    s.count > 0
+                      ? "bg-seal text-seal-foreground"
+                      : "border border-border text-muted-foreground"
+                  }`}
+                >
+                  {s.count > 0 ? `live · ${s.count}` : "wired · 0"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
           {metrics.map((metric) => (
             <div key={metric.label} className="leaf p-4">
               <p className="small-caps-label">{metric.label}</p>
