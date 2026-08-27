@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
-import { getCorpusStatus, ingestCorpusYear } from "@/lib/corpus.functions";
+import { useRef, useState } from "react";
+
+import {
+  embedCorpusBatch,
+  getCorpusStatus,
+  getEmbeddingStatus,
+  ingestCorpusYear,
+} from "@/lib/corpus.functions";
 
 export function CorpusPanel() {
   const queryClient = useQueryClient();
@@ -21,6 +28,43 @@ export function CorpusPanel() {
     },
   });
 
+  const fetchEmbedStatus = useServerFn(getEmbeddingStatus);
+  const runEmbedBatch = useServerFn(embedCorpusBatch);
+  const embedStatus = useQuery({
+    queryKey: ["embedding-status"],
+    queryFn: () => fetchEmbedStatus(),
+  });
+  const [indexing, setIndexing] = useState(false);
+  const [indexNote, setIndexNote] = useState<string | null>(null);
+  const stop = useRef(false);
+
+  async function buildIndex() {
+    stop.current = false;
+    setIndexing(true);
+    setIndexNote("Embedding passages…");
+    try {
+      for (;;) {
+        if (stop.current) {
+          setIndexNote("Paused.");
+          break;
+        }
+        const progress = await runEmbedBatch({ data: { entries: 24 } });
+        setIndexNote(
+          progress.done
+            ? "Semantic index complete."
+            : `${progress.entriesRemaining} entries still to embed…`,
+        );
+        queryClient.invalidateQueries({ queryKey: ["embedding-status"] });
+        if (progress.done || progress.entriesProcessed === 0) break;
+      }
+    } catch (error) {
+      setIndexNote(error instanceof Error ? error.message : "Indexing failed.");
+    } finally {
+      setIndexing(false);
+    }
+  }
+
+  const embed = embedStatus.data;
   const data = status.data;
 
   return (
@@ -92,6 +136,43 @@ export function CorpusPanel() {
             {data ? "Every year from 1660 to the cutoff is ingested." : "Reading registry…"}
           </p>
         )}
+      </div>
+
+      <div className="rounded-md border border-border/70 p-4">
+        <p className="small-caps-label">Semantic index</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Retrieval is hybrid: word matching plus meaning matching over embedded passages, so a
+          paraphrase reaches the day he wrote about. Every passage is still filtered on the
+          historical cutoff inside the database.
+        </p>
+        <div className="mt-3 grid grid-cols-3 gap-3 font-mono text-[11px]">
+          <div>
+            <p className="small-caps-label">Entries indexed</p>
+            <p>
+              {embed ? `${embed.embeddedEntries} / ${embed.entries}` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="small-caps-label">Passages</p>
+            <p>{embed ? embed.chunks.toLocaleString() : "—"}</p>
+          </div>
+          <div>
+            <p className="small-caps-label">Model</p>
+            <p className="break-all">{embed?.model ?? "—"}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={() => (indexing ? (stop.current = true) : buildIndex())}
+            disabled={!embed || (embed.done && !indexing)}
+            className="rounded-md bg-seal px-2.5 py-1.5 font-mono text-[11px] text-seal-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {indexing ? "Pause indexing" : embed?.done ? "Index complete" : "Build semantic index"}
+          </button>
+          {indexNote ? (
+            <span className="font-mono text-[11px] text-muted-foreground">{indexNote}</span>
+          ) : null}
+        </div>
       </div>
 
       {ingest.data ? (

@@ -8,12 +8,22 @@ type DiaryRow = {
   relevance: number;
 };
 
+type HybridRow = {
+  id: string;
+  entry_date: string;
+  date_label: string;
+  content: string;
+  relevance: number;
+  similarity: number | null;
+};
+
 export type RetrievedEntry = {
   id: string;
   entry_date: string;
   date_label: string;
   excerpt: string;
   relevance: number;
+  similarity: number | null;
 };
 
 const STOPWORDS = new Set([
@@ -68,45 +78,79 @@ export async function retrievePassages(
   limit = 6,
 ): Promise<RetrievedEntry[]> {
   const terms = searchTerms(message);
-  if (!terms.length) return [];
+  const query = terms.join(" OR ");
 
-  // Two-pass ranking: conjunctive first (entries mentioning everything asked
-  // about), then disjunctive to fill the remainder. Both passes are cutoff-bound
-  // inside the database function.
-  const run = async (queryText: string, want: number) => {
-    const { data, error } = await supabase.rpc("search_diary_entries", {
-      _subject_id: subjectId,
-      _query: queryText,
-      _cutoff: cutoff,
-      _limit: want,
-    });
-    if (error) {
-      console.error("diary retrieval failed", error.message);
-      return [] as DiaryRow[];
+  // Semantic half of the hybrid: the visitor's question is embedded with the
+  // same model as the corpus, so a paraphrase ("what did you bury?") reaches
+  // the passage that says "digged a pit and put our wine in it".
+  let embedding: number[] | null = null;
+  try {
+    const { embedTexts } = await import("./embeddings.server");
+    embedding = (await embedTexts([message.slice(0, 4000)]))[0] ?? null;
+  } catch (error) {
+    console.error("query embedding failed, falling back to lexical", error);
+  }
+
+  const rows: HybridRow[] = [];
+  const seen = new Set<string>();
+  const push = (incoming: HybridRow[]) => {
+    for (const row of incoming) {
+      const key = row.date_label;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
     }
-    return (data ?? []) as DiaryRow[];
   };
 
-  const rows: DiaryRow[] = [];
-  const seen = new Set<string>();
-  for (const queryText of [terms.join(" "), terms.join(" OR ")]) {
-    if (rows.length >= limit) break;
-    for (const row of await run(queryText, limit)) {
-      if (seen.has(row.id)) continue;
-      seen.add(row.id);
-      rows.push(row);
+  if (embedding) {
+    const { data, error } = await supabase.rpc("hybrid_search_diary", {
+      _subject_id: subjectId,
+      _query: query,
+      _embedding: JSON.stringify(embedding),
+      _cutoff: cutoff,
+      _limit: limit,
+    });
+    if (error) console.error("hybrid retrieval failed", error.message);
+    push((data ?? []) as HybridRow[]);
+  }
+
+  // Lexical fallback / top-up over whole entries, so retrieval still works
+  // before the semantic index is built.
+  if (rows.length < limit && terms.length) {
+    for (const queryText of [terms.join(" "), query]) {
       if (rows.length >= limit) break;
+      const { data, error } = await supabase.rpc("search_diary_entries", {
+        _subject_id: subjectId,
+        _query: queryText,
+        _cutoff: cutoff,
+        _limit: limit,
+      });
+      if (error) {
+        console.error("diary retrieval failed", error.message);
+        continue;
+      }
+      push(
+        ((data ?? []) as DiaryRow[]).map((row) => ({
+          id: row.id,
+          entry_date: row.entry_date,
+          date_label: row.date_label,
+          content: row.original_text,
+          relevance: row.relevance,
+          similarity: null,
+        })),
+      );
     }
   }
-  const data = rows;
 
-  return data
+  return rows
     .filter((row) => row.entry_date <= cutoff)
+    .slice(0, limit)
     .map((row) => ({
       id: row.id,
       entry_date: row.entry_date,
       date_label: row.date_label,
-      excerpt: excerpt(row.original_text, terms),
+      excerpt: excerpt(row.content, terms),
       relevance: row.relevance,
+      similarity: row.similarity,
     }));
 }

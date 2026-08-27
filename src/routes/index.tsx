@@ -143,7 +143,13 @@ function Encounter() {
       try {
         const raw = res.headers.get("x-pepys-passages");
         if (raw) {
-          citedDays = (JSON.parse(raw) as { date: string }[]).map((p) => `diary, ${p.date}`);
+          citedDays = (
+            JSON.parse(raw) as { date: string; similarity: number | null }[]
+          ).map((p) =>
+            typeof p.similarity === "number"
+              ? `diary, ${p.date} (semantic match ${Math.round(p.similarity * 100)}%)`
+              : `diary, ${p.date}`,
+          );
         }
       } catch {
         citedDays = [];

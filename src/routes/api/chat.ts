@@ -127,7 +127,11 @@ export const Route = createFileRoute("/api/chat")({
             "cache-control": "no-store",
             // Citations for the evidence chain: the diary days actually retrieved.
             "x-pepys-passages": JSON.stringify(
-              state.passages.map((p) => ({ date: p.date_label, relevance: p.relevance })),
+              state.passages.map((p) => ({
+                date: p.date_label,
+                relevance: p.relevance,
+                similarity: p.similarity,
+              })),
             ),
             "access-control-expose-headers": "x-pepys-passages",
           },
