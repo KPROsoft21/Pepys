@@ -4,9 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { Chrome, Gauge } from "@/components/pepys/Chrome";
 import { CorpusPanel } from "@/components/pepys/CorpusPanel";
+import { CUTOFF_OPTIONS, cutoffLabel } from "@/lib/firewall";
 import { pct } from "@/lib/pepys";
 import { setRevealStatus } from "@/lib/pepys.functions";
-import { curiosityQuery, dossierQuery } from "@/lib/queries";
+import { rebuildPersonality, setCutoff } from "@/lib/research.functions";
+import { curiosityQuery, dossierQuery, instrumentationQuery } from "@/lib/queries";
+
 
 export const Route = createFileRoute("/research")({
   head: () => ({
@@ -34,12 +37,35 @@ function ResearchMode() {
   const queryClient = useQueryClient();
   const { data } = useQuery(dossierQuery);
   const curiosity = useQuery(curiosityQuery);
+  const instrumentation = useQuery(instrumentationQuery);
   const runReveal = useServerFn(setRevealStatus);
+  const runSetCutoff = useServerFn(setCutoff);
+  const runPersonality = useServerFn(rebuildPersonality);
 
   const reveal = useMutation({
     mutationFn: (revealed: boolean) => runReveal({ data: { revealed } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dossier"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["dossier"] });
+      void queryClient.invalidateQueries({ queryKey: ["instrumentation"] });
+    },
   });
+
+  const cutoffMutation = useMutation({
+    mutationFn: (option: { cutoff: string; label: string }) => runSetCutoff({ data: option }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["instrumentation"] });
+      void queryClient.invalidateQueries({ queryKey: ["dossier"] });
+    },
+  });
+
+  const personalityMutation = useMutation({
+    mutationFn: () => runPersonality({}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["instrumentation"] }),
+  });
+
+  const instr = instrumentation.data;
+  const activeCutoff = instr?.state?.historical_cutoff ?? "1669-05-31";
+
 
   const unknown = data?.concepts.filter((c) => c.status === "unknown") ?? [];
   const partial = data?.concepts.filter((c) => c.status === "partial") ?? [];
@@ -83,6 +109,26 @@ function ResearchMode() {
       value: String(recursive.length),
       note: "questions arising from answers to his own questions",
     },
+    {
+      label: "Firewall denials",
+      value: String(instr?.denials.length ?? 0),
+      note: "retrievals refused for falling after the cutoff",
+    },
+    {
+      label: "Leakage events",
+      value: String(instr?.leaks.length ?? 0),
+      note: "post-cutoff vocabulary caught in output",
+    },
+    {
+      label: "Provenance records",
+      value: String(instr?.counts.provenance ?? 0),
+      note: "memories with a traceable origin",
+    },
+    {
+      label: "Visitors known",
+      value: String(instr?.counts.visitors ?? 0),
+      note: "separate relationships, memory kept private per visitor",
+    },
   ];
 
   return (
@@ -107,7 +153,203 @@ function ResearchMode() {
           ))}
         </section>
 
+        <section className="leaf space-y-4 p-5">
+          <div>
+            <p className="small-caps-label">Experimental condition</p>
+            <h2 className="font-display text-2xl">Historical access controller</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The cutoff is enforced in the data layer: diary entries, life events and memories dated
+              after it are never retrieved, so they cannot reach the model at all. Moving the cutoff
+              re-runs the whole reconstruction against a smaller life.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {CUTOFF_OPTIONS.map((option) => {
+              const active = option.cutoff === activeCutoff;
+              return (
+                <button
+                  key={option.cutoff}
+                  type="button"
+                  disabled={cutoffMutation.isPending}
+                  onClick={() =>
+                    cutoffMutation.mutate({ cutoff: option.cutoff, label: option.label })
+                  }
+                  className={`rounded-md border px-3 py-2 text-xs transition ${
+                    active
+                      ? "border-accent bg-accent/15 text-foreground"
+                      : "border-border text-muted-foreground hover:border-accent/60"
+                  }`}
+                >
+                  <span className="block font-display text-sm">{option.label}</span>
+                  <span className="block">{option.cutoff}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Active cutoff: <span className="text-foreground">{cutoffLabel(activeCutoff)}</span>
+            {instr?.state?.identity_state ? ` · identity state: ${instr.state.identity_state}` : ""}
+          </p>
+          {instr?.denials.length ? (
+            <ul className="space-y-2 text-xs">
+              {instr.denials.slice(0, 8).map((denial) => (
+                <li key={denial.id} className="rounded-md border border-border bg-secondary/50 p-3">
+                  <p className="text-foreground">“{denial.requested}”</p>
+                  <p className="text-muted-foreground">
+                    {denial.blocked_count} entr{denial.blocked_count === 1 ? "y" : "ies"} withheld ·{" "}
+                    {denial.reason}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No denials logged yet. Ask him about something from after the cutoff to exercise the
+              firewall.
+            </p>
+          )}
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="leaf space-y-3 p-5">
+            <div>
+              <p className="small-caps-label">Validation</p>
+              <h2 className="font-display text-2xl">Leakage detection</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Each reply is scanned for vocabulary coined after the cutoff. A term is allowed only
+                if the visitor introduced it or it was taught as a concept; anything else is logged.
+              </p>
+            </div>
+            {instr?.leaks.length ? (
+              <ul className="space-y-2 text-xs">
+                {instr.leaks.slice(0, 8).map((leak) => (
+                  <li key={leak.id} className="rounded-md border border-border bg-secondary/50 p-3">
+                    <p className="text-foreground">
+                      {leak.detected_concept}{" "}
+                      <span className="text-muted-foreground">({leak.severity})</span>
+                    </p>
+                    <p className="text-muted-foreground">…{leak.response}…</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+                No leakage detected across the logged replies.
+              </p>
+            )}
+          </div>
+
+          <div className="leaf space-y-3 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="small-caps-label">Derived state</p>
+                <h2 className="font-display text-2xl">Personality profile</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Traits are computed from markers in his own diary and records within the active
+                  cutoff — not asserted in a prompt.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button-quill shrink-0"
+                disabled={personalityMutation.isPending}
+                onClick={() => personalityMutation.mutate()}
+              >
+                {personalityMutation.isPending ? "Deriving…" : "Rebuild"}
+              </button>
+            </div>
+            {instr?.traits.length ? (
+              <div className="space-y-2">
+                {instr.traits.map((trait) => (
+                  <div key={trait.id}>
+                    <Gauge label={trait.trait} value={trait.value} />
+                    {trait.evidence_note ? (
+                      <p className="text-xs text-muted-foreground">{trait.evidence_note}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+                No profile derived yet. Rebuild to compute traits from the corpus.
+              </p>
+            )}
+            {instr?.emotion ? (
+              <p className="text-xs text-muted-foreground">
+                Last emotional state:{" "}
+                {Object.entries(instr.emotion.dimensions ?? {})
+                  .map(([key, value]) => `${key} ${pct(Number(value) || 0)}`)
+                  .join(" · ")}
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="leaf space-y-3 p-5">
+            <div>
+              <p className="small-caps-label">Audit</p>
+              <h2 className="font-display text-2xl">Belief revision history</h2>
+            </div>
+            {instr?.revisions.length ? (
+              <ul className="space-y-2 text-xs">
+                {instr.revisions.slice(0, 10).map((revision) => (
+                  <li
+                    key={revision.id}
+                    className="rounded-md border border-border bg-secondary/50 p-3"
+                  >
+                    <p className="text-foreground">
+                      {revision.beliefs?.proposition ?? "(belief removed)"}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {revision.stance_before ?? "not held"} (
+                      {revision.confidence_before === null
+                        ? "—"
+                        : pct(revision.confidence_before)}) → {revision.stance_after} (
+                      {pct(revision.confidence_after)}) · {revision.change_reason}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+                No belief revisions recorded yet.
+              </p>
+            )}
+          </div>
+
+          <div className="leaf space-y-3 p-5">
+            <div>
+              <p className="small-caps-label">Audit</p>
+              <h2 className="font-display text-2xl">Contradictions</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Where new testimony collided with something he already held, and how it resolved.
+              </p>
+            </div>
+            {instr?.contradictions.length ? (
+              <ul className="space-y-2 text-xs">
+                {instr.contradictions.slice(0, 10).map((row) => (
+                  <li key={row.id} className="rounded-md border border-border bg-secondary/50 p-3">
+                    <p className="text-foreground">{row.held_proposition}</p>
+                    <p className="text-muted-foreground">
+                      versus “{row.new_claim}” · strength {pct(row.strength)} · {row.status}
+                    </p>
+                    {row.resolution ? (
+                      <p className="text-muted-foreground">{row.resolution}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+                No contradictions logged yet.
+              </p>
+            )}
+          </div>
+        </section>
+
         <CorpusPanel />
+
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="leaf space-y-4 p-5">

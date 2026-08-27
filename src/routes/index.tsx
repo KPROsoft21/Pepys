@@ -53,6 +53,15 @@ function Encounter() {
   const runConsolidate = useServerFn(consolidate);
 
   const [visitor, setVisitor] = useState("a visitor");
+  // A stable, anonymous key so what he learns from *you* stays yours.
+  const [visitorKey] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const existing = window.localStorage.getItem("pepys.visitor");
+    if (existing) return existing;
+    const fresh = crypto.randomUUID();
+    window.localStorage.setItem("pepys.visitor", fresh);
+    return fresh;
+  });
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
@@ -131,7 +140,7 @@ function Encounter() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ conversationId, message, teaching }),
+        body: JSON.stringify({ conversationId, message, teaching, visitorKey }),
       });
 
       if (!res.ok || !res.body) {
@@ -155,6 +164,24 @@ function Encounter() {
         citedDays = [];
       }
 
+      let firewallNote: string | null = null;
+      try {
+        const raw = res.headers.get("x-pepys-firewall");
+        if (raw) {
+          const info = JSON.parse(raw) as {
+            cutoffLabel: string;
+            blocked: number;
+            earliestBlocked: string | null;
+          };
+          firewallNote = info.blocked
+            ? `firewall withheld ${info.blocked} later diary entr${info.blocked === 1 ? "y" : "ies"} (after ${info.cutoffLabel})`
+            : `firewall: nothing after ${info.cutoffLabel} was available to him`;
+        }
+      } catch {
+        firewallNote = null;
+      }
+      const interactionId = res.headers.get("x-pepys-interaction") || null;
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let full = "";
@@ -172,11 +199,22 @@ function Encounter() {
       );
 
       const result = await runConsolidate({
-        data: { conversationId, userMessage: message, reply: full, visitor: visitor || "a visitor" },
+        data: {
+          conversationId,
+          userMessage: message,
+          reply: full,
+          visitor: visitor || "a visitor",
+          visitorKey,
+          interactionId,
+        },
       });
       setConversationId(result.conversationId);
       const evidence: Evidence = {
-        drawnFrom: [...citedDays, ...result.drawnFrom.filter((d) => !citedDays.includes(d))],
+        drawnFrom: [
+          ...citedDays,
+          ...result.drawnFrom.filter((d) => !citedDays.includes(d)),
+          ...(firewallNote ? [firewallNote] : []),
+        ],
         frontier: result.frontier,
         updates: result.updates,
       };

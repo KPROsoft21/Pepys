@@ -195,11 +195,30 @@ The visitor is named ${visitor}.`,
   }
 }
 
+function tokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z']+/)
+    .filter((w) => w.length > 3);
+}
+
+/** Crude proposition matcher: enough to recognise a belief being revisited. */
+function similarity(a: string, b: string): number {
+  const ta = new Set(tokens(a));
+  const tb = new Set(tokens(b));
+  if (!ta.size || !tb.size) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared += 1;
+  return shared / Math.max(ta.size, tb.size);
+}
+
 export async function consolidateExchange(input: {
   conversationId: string | null;
   userMessage: string;
   reply: string;
   visitor: string;
+  visitorKey?: string | null | undefined;
+  interactionId?: string | null | undefined;
 }): Promise<ConsolidationResult> {
   const { data: subject } = await supabaseAdmin
     .from("subjects")
@@ -313,8 +332,35 @@ export async function consolidateExchange(input: {
           confidence: 0.85,
           source_label: `Conversation with ${input.visitor}`,
           impact: extraction.memory.impact,
+          memory_type: "episodic",
+          source_type: "user_interaction",
+          source_date: new Date().toISOString().slice(0, 10),
+          importance: Math.min(0.98, Math.max(0.3, extraction.memory.strength)),
+          emotional_salience: Math.min(
+            1,
+            Math.max(0, ...(extraction.gaps ?? []).map((g) => g.emotional_salience ?? 0), 0.2),
+          ),
+          post_cutoff: true,
+          firsthand: false,
+          immutable_historical: false,
+          visibility: "shared",
+          owner_visitor_key: input.visitorKey ?? null,
         }).select("id").single();
         memoryId = insertedMemory?.id ?? null;
+        if (memoryId) {
+          // Every memory must be able to answer "why does Pepys know this?".
+          await supabaseAdmin.from("provenance_records").insert({
+            subject_id: subject.id,
+            target_type: "memory",
+            target_id: memoryId,
+            category: "user_interaction",
+            interaction_id: input.interactionId ?? null,
+            conversation_id: conversationId,
+            taught_by: input.visitor,
+            quote: input.userMessage.slice(0, 600),
+            note: "Formed from a visitor's explanation during an encounter.",
+          });
+        }
         updates.push(`Memory formed: "${extraction.memory.title}"`);
         await supabaseAdmin.from("learning_log").insert({
           subject_id: subject.id,
@@ -328,24 +374,116 @@ export async function consolidateExchange(input: {
       }
 
       if (extraction.belief) {
-        await supabaseAdmin.from("beliefs").insert({
-          subject_id: subject.id,
-          proposition: extraction.belief.proposition,
-          stance: extraction.belief.stance,
-          confidence: Math.min(0.99, Math.max(0.05, extraction.belief.confidence)),
-          provenance: `Taught by ${input.visitor}`,
-          origin: "learned",
-        });
-        updates.push(`Belief updated: "${extraction.belief.proposition}"`);
-        await supabaseAdmin.from("learning_log").insert({
-          subject_id: subject.id,
-          conversation_id: conversationId,
-          kind: "belief",
-          summary: extraction.belief.proposition,
-          state_before: "not previously held",
-          state_after: `${extraction.belief.stance} (${extraction.belief.confidence})`,
-          confidence: extraction.belief.confidence,
-        });
+        const claim = extraction.belief;
+        const confidence = Math.min(0.99, Math.max(0.05, claim.confidence));
+        const { data: heldBeliefs } = await supabaseAdmin
+          .from("beliefs")
+          .select("id,proposition,stance,confidence")
+          .eq("subject_id", subject.id);
+
+        const match = (heldBeliefs ?? [])
+          .map((b) => ({ belief: b, score: similarity(b.proposition, claim.proposition) }))
+          .sort((a, b) => b.score - a.score)
+          .find((candidate) => candidate.score >= 0.45);
+
+        if (match) {
+          // Beliefs are never silently overwritten: the prior state and the
+          // evidence for the change are kept as revision history.
+          const before = match.belief;
+          const contradicted =
+            before.stance !== claim.stance || Math.abs(before.confidence - confidence) >= 0.15;
+
+          await supabaseAdmin
+            .from("beliefs")
+            .update({
+              stance: claim.stance,
+              confidence,
+              contradiction_status: contradicted ? "revised" : "stable",
+              provenance: `Revised after ${input.visitor} spoke of it`,
+              supporting_memory_ids: memoryId ? [memoryId] : [],
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", before.id);
+
+          await supabaseAdmin.from("belief_history").insert({
+            belief_id: before.id,
+            subject_id: subject.id,
+            confidence_before: before.confidence,
+            confidence_after: confidence,
+            stance_before: before.stance,
+            stance_after: claim.stance,
+            change_reason: contradicted
+              ? "Contradicted by evidence introduced in conversation"
+              : "Reinforced by conversation",
+            evidence: input.userMessage.slice(0, 600),
+            conversation_id: conversationId,
+          });
+
+          if (contradicted) {
+            await supabaseAdmin.from("contradictions").insert({
+              subject_id: subject.id,
+              conversation_id: conversationId,
+              held_proposition: before.proposition,
+              new_claim: claim.proposition,
+              held_belief_id: before.id,
+              held_memory_id: memoryId,
+              strength: Math.min(1, Math.abs(before.confidence - confidence) + 0.2),
+              status: "resolved_by_revision",
+              resolution: `${before.stance} (${before.confidence}) → ${claim.stance} (${confidence})`,
+            });
+          }
+
+          updates.push(
+            `Belief revised: "${before.proposition}" — confidence ${before.confidence} → ${confidence}`,
+          );
+          await supabaseAdmin.from("learning_log").insert({
+            subject_id: subject.id,
+            conversation_id: conversationId,
+            kind: "belief",
+            summary: before.proposition,
+            state_before: `${before.stance} (${before.confidence})`,
+            state_after: `${claim.stance} (${confidence})`,
+            confidence,
+          });
+        } else {
+          const { data: created } = await supabaseAdmin
+            .from("beliefs")
+            .insert({
+              subject_id: subject.id,
+              proposition: claim.proposition,
+              stance: claim.stance,
+              confidence,
+              provenance: `Taught by ${input.visitor}`,
+              origin: "learned",
+              post_cutoff: true,
+              supporting_memory_ids: memoryId ? [memoryId] : [],
+            })
+            .select("id")
+            .maybeSingle();
+          if (created?.id) {
+            await supabaseAdmin.from("belief_history").insert({
+              belief_id: created.id,
+              subject_id: subject.id,
+              confidence_before: null,
+              confidence_after: confidence,
+              stance_before: null,
+              stance_after: claim.stance,
+              change_reason: "Belief formed from new information",
+              evidence: input.userMessage.slice(0, 600),
+              conversation_id: conversationId,
+            });
+          }
+          updates.push(`Belief formed: "${claim.proposition}"`);
+          await supabaseAdmin.from("learning_log").insert({
+            subject_id: subject.id,
+            conversation_id: conversationId,
+            kind: "belief",
+            summary: claim.proposition,
+            state_before: "not previously held",
+            state_after: `${claim.stance} (${confidence})`,
+            confidence,
+          });
+        }
       }
 
       const { recordAnswer, registerCuriosity } = await import("./curiosity.server");
@@ -370,6 +508,34 @@ export async function consolidateExchange(input: {
         parentQuestionId: extraction.answered_question ? (pending?.id ?? null) : null,
       });
       updates.push(...opened);
+
+      // Lightweight emotional state, derived from the exchange itself.
+      const gaps = extraction.gaps ?? [];
+      const peak = (key: "surprise" | "novelty" | "emotional_salience" | "uncertainty") =>
+        gaps.length ? Math.max(...gaps.map((g) => g[key] ?? 0)) : 0;
+      await supabaseAdmin.from("emotional_states").insert({
+        subject_id: subject.id,
+        conversation_id: conversationId,
+        dimensions: {
+          surprise: peak("surprise"),
+          curiosity: peak("novelty"),
+          confusion: peak("uncertainty"),
+          affect: extraction.memory ? peak("emotional_salience") : 0.1,
+        },
+        trigger: extraction.frontier_note || input.userMessage.slice(0, 200),
+      });
+
+      if (input.visitorKey) {
+        const { recordRelationshipTurn } = await import("./relationship.server");
+        await recordRelationshipTurn(supabaseAdmin, {
+          subjectId: subject.id,
+          visitorKey: input.visitorKey,
+          displayName: input.visitor,
+          topics: (extraction.concepts ?? []).map((c) => c.name),
+          taughtSomething: (extraction.concepts ?? []).length > 0,
+          unresolvedQuestion: gaps.length ? (gaps[0]?.questions?.[0]?.question ?? null) : null,
+        });
+      }
     }
   }
 
@@ -388,6 +554,18 @@ export async function applyRevealStatus(revealed: boolean) {
   if (subject.reveal_status === next) return { reveal_status: next };
 
   await supabaseAdmin.from("subjects").update({ reveal_status: next }).eq("id", subject.id);
+  await supabaseAdmin
+    .from("pepys_state")
+    .update({ identity_state: revealed ? "revealed" : "unrevealed" })
+    .eq("subject_id", subject.id)
+    .is("fork_id", null);
+  await supabaseAdmin.from("identity_events").insert({
+    subject_id: subject.id,
+    from_state: subject.reveal_status,
+    to_state: next,
+    trigger_quote: revealed ? "Researcher activated the reveal condition." : null,
+    reaction: null,
+  });
   await supabaseAdmin.from("learning_log").insert({
     subject_id: subject.id,
     kind: "identity",
