@@ -1,7 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { BookOpen, CornerDownLeft, GraduationCap, Loader2, Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  CornerDownLeft,
+  GraduationCap,
+  Loader2,
+  Sparkles,
+  Square,
+  Volume2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import portrait from "@/assets/pepys-portrait.jpg";
@@ -52,11 +60,58 @@ function Encounter() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openEvidence, setOpenEvidence] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns]);
+
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  function stopVoice() {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setSpeakingId(null);
+  }
+
+  async function speak(turnId: string, text: string) {
+    if (speakingId === turnId) {
+      stopVoice();
+      return;
+    }
+    stopVoice();
+    setLoadingVoiceId(turnId);
+    setError(null);
+    try {
+      const res = await fetch("/api/voice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "He could not be heard.");
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setSpeakingId((current) => (current === turnId ? null : current));
+      };
+      await audio.play();
+      setSpeakingId(turnId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "He could not be heard.");
+    } finally {
+      setLoadingVoiceId(null);
+    }
+  }
 
   async function send(text: string) {
     const message = text.trim();
@@ -129,13 +184,27 @@ function Encounter() {
         <section className="grid gap-8 py-10 lg:grid-cols-[320px_1fr] lg:py-14">
           <div className="space-y-4">
             <figure className="leaf overflow-hidden p-2 shadow-plate">
-              <img
-                src={portrait}
-                alt="Painted portrait of Samuel Pepys in a dark coat and long periwig, holding a sheet of paper"
-                width={1024}
-                height={1280}
-                className="w-full rounded-sm object-cover"
-              />
+              <div className="relative overflow-hidden rounded-sm">
+                <img
+                  src={portrait}
+                  alt="Painted portrait of Samuel Pepys in a dark coat and long periwig, holding a sheet of paper"
+                  width={1024}
+                  height={1280}
+                  className={`w-full rounded-sm object-cover transition-[filter,transform] duration-700 ${
+                    speakingId ? "scale-[1.02] brightness-105" : ""
+                  }`}
+                />
+                {speakingId && (
+                  <span className="absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-primary/85 px-2.5 py-1 font-mono text-[10px] text-primary-foreground">
+                    <span className="inline-flex items-end gap-[2px]" aria-hidden>
+                      <span className="h-2 w-[2px] animate-pulse bg-primary-foreground" />
+                      <span className="h-3 w-[2px] animate-pulse bg-primary-foreground [animation-delay:150ms]" />
+                      <span className="h-1.5 w-[2px] animate-pulse bg-primary-foreground [animation-delay:300ms]" />
+                    </span>
+                    speaking
+                  </span>
+                )}
+              </div>
               <figcaption className="px-2 pt-3 pb-1">
                 <h1 className="font-display text-3xl leading-tight">Samuel Pepys</h1>
                 <p className="text-sm text-muted-foreground">
@@ -219,6 +288,26 @@ function Encounter() {
                           <span className="ml-1 inline-block animate-pulse font-mono">▍</span>
                         )}
                       </p>
+                      {!turn.pending && turn.content && (
+                        <button
+                          onClick={() => void speak(turn.id, turn.content)}
+                          aria-pressed={speakingId === turn.id}
+                          className={`small-caps-label inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+                            speakingId === turn.id
+                              ? "border-seal bg-seal text-seal-foreground"
+                              : "border-border hover:bg-accent"
+                          }`}
+                        >
+                          {loadingVoiceId === turn.id ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : speakingId === turn.id ? (
+                            <Square className="size-3" />
+                          ) : (
+                            <Volume2 className="size-3" />
+                          )}
+                          {speakingId === turn.id ? "Stop" : "Hear him"}
+                        </button>
+                      )}
                       {turn.evidence && (
                         <div className="space-y-2">
                           <button
