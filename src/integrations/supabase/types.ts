@@ -14,7 +14,449 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      beliefs: {
+        Row: {
+          confidence: number
+          created_at: string
+          id: string
+          origin: string
+          proposition: string
+          provenance: string | null
+          stance: string
+          subject_id: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          origin?: string
+          proposition: string
+          provenance?: string | null
+          stance: string
+          subject_id: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          id?: string
+          origin?: string
+          proposition?: string
+          provenance?: string | null
+          stance?: string
+          subject_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beliefs_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      concepts: {
+        Row: {
+          category: string
+          created_at: string
+          first_known_at: string | null
+          id: string
+          name: string
+          status: string
+          subject_id: string
+          taught_by: string | null
+          understanding: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          first_known_at?: string | null
+          id?: string
+          name: string
+          status?: string
+          subject_id: string
+          taught_by?: string | null
+          understanding?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          first_known_at?: string | null
+          id?: string
+          name?: string
+          status?: string
+          subject_id?: string
+          taught_by?: string | null
+          understanding?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concepts_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          subject_id: string
+          user_label: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          subject_id: string
+          user_label?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          subject_id?: string
+          user_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_log: {
+        Row: {
+          confidence: number | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          state_after: string | null
+          state_before: string | null
+          subject_id: string
+          summary: string
+        }
+        Insert: {
+          confidence?: number | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          state_after?: string | null
+          state_before?: string | null
+          subject_id: string
+          summary: string
+        }
+        Update: {
+          confidence?: number | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          state_after?: string | null
+          state_before?: string | null
+          subject_id?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_log_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_log_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      life_events: {
+        Row: {
+          created_at: string
+          date_label: string | null
+          description: string | null
+          id: string
+          salience: number
+          source_label: string | null
+          subject_id: string
+          title: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          date_label?: string | null
+          description?: string | null
+          id?: string
+          salience?: number
+          source_label?: string | null
+          subject_id: string
+          title: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          date_label?: string | null
+          description?: string | null
+          id?: string
+          salience?: number
+          source_label?: string | null
+          subject_id?: string
+          title?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "life_events_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      memories: {
+        Row: {
+          confidence: number
+          content: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          impact: string | null
+          learned_label: string | null
+          scope: string
+          source_label: string | null
+          strength: number
+          subject_id: string
+          title: string
+        }
+        Insert: {
+          confidence?: number
+          content: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          impact?: string | null
+          learned_label?: string | null
+          scope?: string
+          source_label?: string | null
+          strength?: number
+          subject_id: string
+          title: string
+        }
+        Update: {
+          confidence?: number
+          content?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          impact?: string | null
+          learned_label?: string | null
+          scope?: string
+          source_label?: string | null
+          strength?: number
+          subject_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memories_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memories_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          meta: Json
+          role: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          meta?: Json
+          role: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          meta?: Json
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          confidence: number
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          relation: string
+          sentiment: number
+          subject_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          relation: string
+          sentiment?: number
+          subject_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          relation?: string
+          sentiment?: number
+          subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sources: {
+        Row: {
+          citation: string | null
+          coverage: string | null
+          created_at: string
+          id: string
+          kind: string
+          licence: string | null
+          subject_id: string
+          tier: number
+          title: string
+          url: string | null
+        }
+        Insert: {
+          citation?: string | null
+          coverage?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          licence?: string | null
+          subject_id: string
+          tier?: number
+          title: string
+          url?: string | null
+        }
+        Update: {
+          citation?: string | null
+          coverage?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          licence?: string | null
+          subject_id?: string
+          tier?: number
+          title?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sources_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subjects: {
+        Row: {
+          birth_year: number | null
+          created_at: string
+          cutoff_label: string
+          cutoff_year: number
+          death_year: number | null
+          epitaph: string | null
+          honorific: string | null
+          id: string
+          name: string
+          portrait_url: string | null
+          reconstructed_at: string
+          reveal_status: string
+          slug: string
+        }
+        Insert: {
+          birth_year?: number | null
+          created_at?: string
+          cutoff_label: string
+          cutoff_year: number
+          death_year?: number | null
+          epitaph?: string | null
+          honorific?: string | null
+          id?: string
+          name: string
+          portrait_url?: string | null
+          reconstructed_at?: string
+          reveal_status?: string
+          slug: string
+        }
+        Update: {
+          birth_year?: number | null
+          created_at?: string
+          cutoff_label?: string
+          cutoff_year?: number
+          death_year?: number | null
+          epitaph?: string | null
+          honorific?: string | null
+          id?: string
+          name?: string
+          portrait_url?: string | null
+          reconstructed_at?: string
+          reveal_status?: string
+          slug?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
