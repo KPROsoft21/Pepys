@@ -274,6 +274,26 @@ function Encounter() {
                           <span className="ml-1 inline-block animate-pulse font-mono">▍</span>
                         )}
                       </p>
+                      {!turn.pending && turn.content && (
+                        <button
+                          onClick={() => void speak(turn.id, turn.content)}
+                          aria-pressed={speakingId === turn.id}
+                          className={`small-caps-label inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+                            speakingId === turn.id
+                              ? "border-seal bg-seal text-seal-foreground"
+                              : "border-border hover:bg-accent"
+                          }`}
+                        >
+                          {loadingVoiceId === turn.id ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : speakingId === turn.id ? (
+                            <Square className="size-3" />
+                          ) : (
+                            <Volume2 className="size-3" />
+                          )}
+                          {speakingId === turn.id ? "Stop" : "Hear him"}
+                        </button>
+                      )}
                       {turn.evidence && (
                         <div className="space-y-2">
                           <button
