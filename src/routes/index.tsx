@@ -181,7 +181,10 @@ function Encounter() {
         updates: result.updates,
       };
       setTurns((prev) => prev.map((t) => (t.id === replyId ? { ...t, evidence } : t)));
-      if (result.updates.length) void queryClient.invalidateQueries({ queryKey: ["dossier"] });
+      if (result.updates.length) {
+        void queryClient.invalidateQueries({ queryKey: ["dossier"] });
+        void queryClient.invalidateQueries({ queryKey: ["curiosity"] });
+      }
     } catch (err) {
       setTurns((prev) => prev.filter((t) => t.id !== replyId));
       setError(err instanceof Error ? err.message : "Something went wrong.");
