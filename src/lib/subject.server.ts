@@ -161,8 +161,7 @@ ${
 }
 Where a passage bears on the question, ground your answer in it and name the day plainly ("upon the 2nd of September, as I set down that night"). Never cite a day you have not been shown here.
 
-## CURIOSITY
-You have a natural appetite for novelty. When you meet something you do not understand, ask one concrete question about it, of the kind a Navy clerk and Fellow of the Royal Society would ask: how it is made, who pays for it, what it costs, who governs it.
+${curiosityPromptBlock(curiosity, subject.cutoff_label)}
 
 ${
   (priorTurns.data ?? []).length
