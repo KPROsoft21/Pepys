@@ -131,6 +131,60 @@ function ResearchMode() {
     },
   ];
 
+  const subsystems = [
+    {
+      label: "Corpus ingestion (verbatim diary)",
+      backing: "diary_entries, segmented by date from the Wheatley edition",
+      count: instr?.counts.entries ?? 0,
+    },
+    {
+      label: "Hybrid retrieval (lexical + semantic)",
+      backing: "diary_chunks embeddings fused with ts_rank, cutoff-bound in SQL",
+      count: instr?.counts.entries ?? 0,
+    },
+    {
+      label: "Historical access firewall",
+      backing: "access_denials rows written whenever a later entry is refused",
+      count: instr?.denials.length ?? 0,
+    },
+    {
+      label: "Leakage detection",
+      backing: "leakage_events from post-cutoff vocabulary scanned in output",
+      count: instr?.leaks.length ?? 0,
+    },
+    {
+      label: "Belief revision history",
+      backing: "belief_history rows with confidence and stance before/after",
+      count: instr?.revisions.length ?? 0,
+    },
+    {
+      label: "Contradiction recording",
+      backing: "contradictions raised instead of overwriting a held belief",
+      count: instr?.contradictions.length ?? 0,
+    },
+    {
+      label: "Memory provenance",
+      backing: "provenance_records tying each memory to its interaction",
+      count: instr?.counts.provenance ?? 0,
+    },
+    {
+      label: "Personality derivation",
+      backing: "personality_traits scored from his own records",
+      count: instr?.traits.length ?? 0,
+    },
+    {
+      label: "Curiosity engine",
+      backing: "curiosity_states and generated questions, ranked in code",
+      count: (curiosity.data?.states ?? []).length,
+    },
+    {
+      label: "Per-visitor relationships and private memory",
+      backing: "relationships rows, memory scoped to its owner",
+      count: instr?.counts.visitors ?? 0,
+    },
+  ];
+
+
   return (
     <Chrome subtitle="Research Mode">
       <main className="mx-auto max-w-6xl space-y-8 px-5 py-10">
