@@ -1,5 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+type DiaryRow = {
+  id: string;
+  entry_date: string;
+  date_label: string;
+  original_text: string;
+  relevance: number;
+};
+
 export type RetrievedEntry = {
   id: string;
   entry_date: string;
@@ -62,24 +70,37 @@ export async function retrievePassages(
   const terms = searchTerms(message);
   if (!terms.length) return [];
 
-  const { data, error } = await supabase.rpc("search_diary_entries", {
-    _subject_id: subjectId,
-    _query: terms.join(" OR "),
-    _cutoff: cutoff,
-    _limit: limit,
-  });
-  if (error) {
-    console.error("diary retrieval failed", error.message);
-    return [];
-  }
+  // Two-pass ranking: conjunctive first (entries mentioning everything asked
+  // about), then disjunctive to fill the remainder. Both passes are cutoff-bound
+  // inside the database function.
+  const run = async (queryText: string, want: number) => {
+    const { data, error } = await supabase.rpc("search_diary_entries", {
+      _subject_id: subjectId,
+      _query: queryText,
+      _cutoff: cutoff,
+      _limit: want,
+    });
+    if (error) {
+      console.error("diary retrieval failed", error.message);
+      return [] as DiaryRow[];
+    }
+    return (data ?? []) as DiaryRow[];
+  };
 
-  return ((data ?? []) as {
-    id: string;
-    entry_date: string;
-    date_label: string;
-    original_text: string;
-    relevance: number;
-  }[])
+  const rows: DiaryRow[] = [];
+  const seen = new Set<string>();
+  for (const queryText of [terms.join(" "), terms.join(" OR ")]) {
+    if (rows.length >= limit) break;
+    for (const row of await run(queryText, limit)) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      rows.push(row);
+      if (rows.length >= limit) break;
+    }
+  }
+  const data = rows;
+
+  return data
     .filter((row) => row.entry_date <= cutoff)
     .map((row) => ({
       id: row.id,
