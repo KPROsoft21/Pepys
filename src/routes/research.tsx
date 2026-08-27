@@ -143,7 +143,42 @@ function ResearchMode() {
           </p>
         </header>
 
+        <section className="leaf space-y-4 p-5">
+          <div>
+            <p className="small-caps-label">Build status</p>
+            <h2 className="font-display text-2xl">V4 cognitive engine — implemented</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Each subsystem below is backed by database rows, not prompt wording. &ldquo;Live&rdquo;
+              means the subsystem is wired and has written records; &ldquo;Wired, no records
+              yet&rdquo; means the code path exists but nothing has triggered it in this run.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {subsystems.map((s) => (
+              <div
+                key={s.label}
+                className="flex items-start justify-between gap-3 rounded-md border border-border/70 p-3"
+              >
+                <div>
+                  <p className="text-sm">{s.label}</p>
+                  <p className="text-xs text-muted-foreground">{s.backing}</p>
+                </div>
+                <span
+                  className={`whitespace-nowrap rounded-sm px-2 py-0.5 font-mono text-[10px] ${
+                    s.count > 0
+                      ? "bg-seal text-seal-foreground"
+                      : "border border-border text-muted-foreground"
+                  }`}
+                >
+                  {s.count > 0 ? `live · ${s.count}` : "wired · 0"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
           {metrics.map((metric) => (
             <div key={metric.label} className="leaf p-4">
               <p className="small-caps-label">{metric.label}</p>
