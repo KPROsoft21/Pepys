@@ -51,6 +51,10 @@ const MONTH_HEAD_RE = new RegExp(
 );
 /** "2d. ...", "23rd. ..." — subsequent days within the open month. */
 const DAY_HEAD_RE = /^(\d{1,2})(?:st|nd|rd|d|th)?\.\s*(.*)$/;
+/** "JANUARY 1663-64" / "MAY 1664" — the edition's month section headings. */
+const SECTION_RE = new RegExp(
+  `^(${MONTHS.map((m) => m.toUpperCase()).join("|")})[,]?\\s+16\\d\\d(?:-\\d{1,4})?\\.?\\s*$`,
+);
 
 function stripGutenbergWrapper(raw: string): string {
   const start = raw.search(/\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG/i);
