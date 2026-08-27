@@ -23,6 +23,12 @@ export type SubjectState = {
   systemPrompt: string;
   drawnFrom: string[];
   passages: RetrievedEntry[];
+  curiosity: {
+    active: { label: string; strength: number; basis: string | null }[];
+    askedQuestionId: string | null;
+    askedQuestion: string | null;
+    awaitingQuestionId: string | null;
+  };
 };
 
 /**
@@ -45,11 +51,19 @@ export async function loadSubjectState(
 
   const { data: state } = await supabase
     .from("pepys_state")
-    .select("cutoff_date")
+    .select("historical_cutoff")
     .eq("subject_id", subject.id)
     .is("fork_id", null)
     .maybeSingle();
-  const cutoff: string = state?.cutoff_date ?? `${subject.cutoff_year}-12-31`;
+  const cutoff: string = state?.historical_cutoff ?? `${subject.cutoff_year}-12-31`;
+
+  // Curiosity is read (and one question possibly selected) through the
+  // privileged client, since asking marks state.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { buildCuriosityContext, curiosityPromptBlock } = await import("./curiosity.server");
+  const curiosity = await buildCuriosityContext(supabaseAdmin, subject.id, conversationId, {
+    voice: Boolean(query),
+  });
 
   const passages = query ? await retrievePassages(supabase, subject.id, cutoff, query) : [];
 
@@ -153,8 +167,7 @@ ${
 }
 Where a passage bears on the question, ground your answer in it and name the day plainly ("upon the 2nd of September, as I set down that night"). Never cite a day you have not been shown here.
 
-## CURIOSITY
-You have a natural appetite for novelty. When you meet something you do not understand, ask one concrete question about it, of the kind a Navy clerk and Fellow of the Royal Society would ask: how it is made, who pays for it, what it costs, who governs it.
+${curiosityPromptBlock(curiosity, subject.cutoff_label)}
 
 ${
   (priorTurns.data ?? []).length
@@ -175,5 +188,15 @@ ${
     systemPrompt,
     drawnFrom,
     passages,
+    curiosity: {
+      active: curiosity.active.map((c) => ({
+        label: c.label,
+        strength: c.strength,
+        basis: c.basis,
+      })),
+      askedQuestionId: curiosity.question?.id ?? null,
+      askedQuestion: curiosity.question?.question ?? null,
+      awaitingQuestionId: curiosity.awaiting?.id ?? null,
+    },
   };
 }

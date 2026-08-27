@@ -5,7 +5,7 @@ import { useState } from "react";
 import portrait from "@/assets/pepys-portrait.jpg";
 import { Chrome, Gauge } from "@/components/pepys/Chrome";
 import { bar, pct } from "@/lib/pepys";
-import { dossierQuery } from "@/lib/queries";
+import { curiosityQuery, dossierQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/book")({
   head: () => ({
@@ -35,6 +35,7 @@ const CHAPTERS = [
   "People",
   "Memories",
   "Beliefs",
+  "Curiosity",
   "Learned Since",
   "Unknowns",
   "Origin",
@@ -42,6 +43,7 @@ const CHAPTERS = [
 
 function LifeBook() {
   const { data, isLoading } = useQuery(dossierQuery);
+  const curiosity = useQuery(curiosityQuery);
   const [chapter, setChapter] = useState<(typeof CHAPTERS)[number]>("Cover");
 
   const original = data?.memories.filter((m) => m.scope === "original") ?? [];
@@ -238,6 +240,100 @@ function LifeBook() {
                     </div>
                   </article>
                 ))}
+              </div>
+            )}
+
+            {chapter === "Curiosity" && (
+              <div className="space-y-4">
+                <div className="leaf p-5">
+                  <p className="small-caps-label">What is working on him</p>
+                  <p className="diary-hand mt-1">
+                    Each appetite below was opened by a real exchange. Its strength is computed from
+                    the gap in his knowledge, its novelty and surprise, and how far the matter
+                    touches ground his own diary dwells on — not from any list of interests given to
+                    him.
+                  </p>
+                </div>
+                {(curiosity.data?.states ?? []).length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing is gnawing at him yet. Tell him something of your century and watch this
+                    page fill.
+                  </p>
+                )}
+                {(curiosity.data?.states ?? []).map((state) => {
+                  const questions = (curiosity.data?.questions ?? []).filter(
+                    (q) => q.curiosity_id === state.id,
+                  );
+                  return (
+                    <article key={state.id} className="leaf p-5">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                          <p className="small-caps-label">
+                            {state.target_type} · {state.resolved ? "settled" : "unresolved"}
+                          </p>
+                          <h2 className="font-display text-xl">{state.target_label}</h2>
+                        </div>
+                        <Gauge
+                          value={Number(state.curiosity_strength)}
+                          label={`appetite ${pct(Number(state.curiosity_strength))}`}
+                        />
+                      </div>
+                      {state.relevance_basis && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Why it takes hold: {state.relevance_basis}.
+                        </p>
+                      )}
+                      <div className="rule-line my-3" />
+                      <dl className="grid gap-3 text-sm sm:grid-cols-4">
+                        <div>
+                          <dt className="small-caps-label">Gap</dt>
+                          <dd className="font-mono text-xs">{bar(Number(state.knowledge_gap), 6)}</dd>
+                        </div>
+                        <div>
+                          <dt className="small-caps-label">Novelty</dt>
+                          <dd className="font-mono text-xs">{bar(Number(state.novelty), 6)}</dd>
+                        </div>
+                        <div>
+                          <dt className="small-caps-label">Surprise</dt>
+                          <dd className="font-mono text-xs">{bar(Number(state.surprise), 6)}</dd>
+                        </div>
+                        <div>
+                          <dt className="small-caps-label">Relevance</dt>
+                          <dd className="font-mono text-xs">
+                            {bar(Number(state.personal_relevance), 6)}
+                          </dd>
+                        </div>
+                      </dl>
+                      {questions.length > 0 && (
+                        <ul className="mt-4 space-y-2">
+                          {questions.map((q) => (
+                            <li
+                              key={q.id}
+                              className="rounded-md border border-dashed border-border px-3 py-2 text-sm"
+                            >
+                              <p>“{q.question}”</p>
+                              <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                                {q.answered
+                                  ? "asked and answered"
+                                  : q.asked
+                                    ? "asked, awaiting an answer"
+                                    : "held back, unvoiced"}
+                                {" · gain "}
+                                {pct(Number(q.expected_information_gain))}
+                                {q.depth > 1 ? ` · follows an earlier question (depth ${q.depth})` : ""}
+                              </p>
+                              {q.answered && q.answer && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Answered: {q.answer}
+                                </p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             )}
 
