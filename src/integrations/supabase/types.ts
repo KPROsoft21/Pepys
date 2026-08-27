@@ -585,6 +585,7 @@ export type Database = {
           entry_id: string
           id: string
           model_version: string
+          search_tsv: unknown
           subject_id: string
         }
         Insert: {
@@ -597,6 +598,7 @@ export type Database = {
           entry_id: string
           id?: string
           model_version?: string
+          search_tsv?: unknown
           subject_id: string
         }
         Update: {
@@ -609,6 +611,7 @@ export type Database = {
           entry_id?: string
           id?: string
           model_version?: string
+          search_tsv?: unknown
           subject_id?: string
         }
         Relationships: [
