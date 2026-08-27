@@ -252,3 +252,29 @@ export async function consolidateExchange(input: {
 
   return { conversationId, drawnFrom, frontier, updates };
 }
+
+export async function applyRevealStatus(revealed: boolean) {
+  const { data: subject } = await supabaseAdmin
+    .from("subjects")
+    .select("id,reveal_status")
+    .eq("slug", SUBJECT_SLUG)
+    .single();
+  if (!subject) throw new Error("Subject not found");
+
+  const next = revealed ? "revealed" : "hidden";
+  if (subject.reveal_status === next) return { reveal_status: next };
+
+  await supabaseAdmin.from("subjects").update({ reveal_status: next }).eq("id", subject.id);
+  await supabaseAdmin.from("learning_log").insert({
+    subject_id: subject.id,
+    kind: "identity",
+    summary: revealed
+      ? "Identity reveal condition activated: the subject has been told he is a reconstruction."
+      : "Identity reveal withdrawn: the subject no longer holds that he is a reconstruction.",
+    state_before: subject.reveal_status,
+    state_after: next,
+    confidence: 1,
+  });
+
+  return { reveal_status: next };
+}
