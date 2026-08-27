@@ -45,7 +45,12 @@ export type ParsedEntry = {
   char_count: number;
 };
 
-const HEAD_RE = new RegExp(`^(${MONTHS.join("|")})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\.\\s*(.*)$`);
+/** "February 1st. ..." — a month heading opens each month. */
+const MONTH_HEAD_RE = new RegExp(
+  `^(${MONTHS.join("|")})\\s+(\\d{1,2})(?:st|nd|rd|d|th)?\\.\\s*(.*)$`,
+);
+/** "2d. ...", "23rd. ..." — subsequent days within the open month. */
+const DAY_HEAD_RE = /^(\d{1,2})(?:st|nd|rd|d|th)?\.\s*(.*)$/;
 
 function stripGutenbergWrapper(raw: string): string {
   const start = raw.search(/\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG/i);
