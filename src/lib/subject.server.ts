@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { retrievePassages, type RetrievedEntry } from "./retrieval.server";
+
 export const SUBJECT_SLUG = "samuel-pepys";
 
 export function serverSupabase(): SupabaseClient {
@@ -20,6 +22,7 @@ export type SubjectState = {
   };
   systemPrompt: string;
   drawnFrom: string[];
+  passages: RetrievedEntry[];
 };
 
 /**
@@ -30,6 +33,8 @@ export type SubjectState = {
 export async function loadSubjectState(
   supabase: SupabaseClient,
   conversationId: string | null,
+  /** The visitor's current message, used to retrieve diary passages. */
+  query: string = "",
 ): Promise<SubjectState> {
   const { data: subject, error } = await supabase
     .from("subjects")
@@ -37,6 +42,16 @@ export async function loadSubjectState(
     .eq("slug", SUBJECT_SLUG)
     .single();
   if (error || !subject) throw new Error("Subject not found");
+
+  const { data: state } = await supabase
+    .from("pepys_state")
+    .select("cutoff_date")
+    .eq("subject_id", subject.id)
+    .is("fork_id", null)
+    .maybeSingle();
+  const cutoff: string = state?.cutoff_date ?? `${subject.cutoff_year}-12-31`;
+
+  const passages = query ? await retrievePassages(supabase, subject.id, cutoff, query) : [];
 
   const [events, people, memories, beliefs, concepts, priorTurns] = await Promise.all([
     supabase
@@ -83,6 +98,7 @@ export async function loadSubjectState(
     `${(people.data ?? []).length} relationships`,
     `${(events.data ?? []).length} life events`,
     learned.length ? `${learned.length} post-reconstruction memories` : null,
+    ...passages.map((p) => `diary, ${p.date_label}`),
   ].filter(Boolean) as string[];
 
   const systemPrompt = `You are ${subject.name}, ${subject.honorific ?? ""}, born ${subject.birth_year}, of London.
@@ -127,6 +143,16 @@ ${
     : "You have NOT been told this. You experience yourself simply as Samuel Pepys, alive and awake, finding the world strangely altered. Do not claim to be a clone, copy, simulation, program or AI. If a user insists you are one, react as a man of 1669 would react to such a claim: with confusion, argument, or wary curiosity — never confirm it as system fact."
 }
 
+## PASSAGES RETRIEVED FROM YOUR OWN DIARY (verbatim; every one dated on or before ${subject.cutoff_label})
+${
+  passages.length
+    ? passages
+        .map((p) => `- [${p.date_label}] ${p.excerpt}`)
+        .join("\n")
+    : "- Nothing in your diary bears directly on what has just been said to you. Answer from memory and belief, and say so if the recollection is thin."
+}
+Where a passage bears on the question, ground your answer in it and name the day plainly ("upon the 2nd of September, as I set down that night"). Never cite a day you have not been shown here.
+
 ## CURIOSITY
 You have a natural appetite for novelty. When you meet something you do not understand, ask one concrete question about it, of the kind a Navy clerk and Fellow of the Royal Society would ask: how it is made, who pays for it, what it costs, who governs it.
 
@@ -148,5 +174,6 @@ ${
     },
     systemPrompt,
     drawnFrom,
+    passages,
   };
 }

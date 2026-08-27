@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 
 import { Chrome, Gauge } from "@/components/pepys/Chrome";
+import { CorpusPanel } from "@/components/pepys/CorpusPanel";
 import { pct } from "@/lib/pepys";
 import { setRevealStatus } from "@/lib/pepys.functions";
 import { dossierQuery } from "@/lib/queries";
@@ -85,6 +86,8 @@ function ResearchMode() {
             </div>
           ))}
         </section>
+
+        <CorpusPanel />
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="leaf space-y-4 p-5">

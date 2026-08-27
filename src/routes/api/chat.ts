@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/chat")({
         if (!message) return new Response("Empty message", { status: 400 });
 
         const supabase = serverSupabase();
-        const state = await loadSubjectState(supabase, body.conversationId ?? null);
+        const state = await loadSubjectState(supabase, body.conversationId ?? null, message);
 
         const instruction = body.teaching
           ? `${state.systemPrompt}\n\n## TEACHING MODE\nThe visitor is deliberately explaining something from after your time. Listen closely, restate what you now understand in your own words, name what still puzzles you, and ask exactly one further question.`
@@ -125,6 +125,11 @@ export const Route = createFileRoute("/api/chat")({
           headers: {
             "content-type": "text/plain; charset=utf-8",
             "cache-control": "no-store",
+            // Citations for the evidence chain: the diary days actually retrieved.
+            "x-pepys-passages": JSON.stringify(
+              state.passages.map((p) => ({ date: p.date_label, relevance: p.relevance })),
+            ),
+            "access-control-expose-headers": "x-pepys-passages",
           },
         });
       },
