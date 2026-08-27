@@ -109,3 +109,27 @@ export function bar(value: number, cells = 10) {
   const filled = Math.max(0, Math.min(cells, Math.round(value * cells)));
   return "█".repeat(filled) + "░".repeat(cells - filled);
 }
+
+export type Fork = {
+  id: string;
+  label: string;
+  premise: string;
+  divergence_year: number;
+  divergence_label: string | null;
+  summary: string | null;
+  self_account: string | null;
+  confidence: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type ForkEvent = {
+  id: string;
+  fork_id: string;
+  year: number;
+  date_label: string | null;
+  title: string;
+  description: string | null;
+  divergence: string;
+  confidence: number;
+};

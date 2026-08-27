@@ -4,6 +4,8 @@ import {
   SUBJECT_SLUG,
   type Belief,
   type Concept,
+  type Fork,
+  type ForkEvent,
   type LearningEntry,
   type LifeEvent,
   type Memory,
@@ -73,5 +75,24 @@ export const dossierQuery = {
       log: (log.data ?? []) as LearningEntry[],
       messageCount: messages.count ?? 0,
     };
+  },
+};
+
+export const forksQuery = {
+  queryKey: ["forks"],
+  queryFn: async (): Promise<{ forks: Fork[]; events: ForkEvent[] }> => {
+    const { data: forks, error } = await supabase
+      .from("forks")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    const ids = (forks ?? []).map((f) => f.id);
+    if (!ids.length) return { forks: [], events: [] };
+    const { data: events } = await supabase
+      .from("fork_events")
+      .select("*")
+      .in("fork_id", ids)
+      .order("year");
+    return { forks: (forks ?? []) as Fork[], events: (events ?? []) as ForkEvent[] };
   },
 };
