@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as ForksRouteImport } from './routes/forks'
 import { Route as ResearchRouteImport } from './routes/research'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiVoiceRouteImport } from './routes/api/voice'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const BookRoute = BookRouteImport.update({
   id: '/book',
   path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForksRoute = ForksRouteImport.update({
+  id: '/forks',
+  path: '/forks',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResearchRoute = ResearchRouteImport.update({
@@ -44,6 +50,7 @@ const ApiVoiceRoute = ApiVoiceRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/book': typeof BookRoute
+  '/forks': typeof ForksRoute
   '/research': typeof ResearchRoute
   '/api/chat': typeof ApiChatRoute
   '/api/voice': typeof ApiVoiceRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/book': typeof BookRoute
+  '/forks': typeof ForksRoute
   '/research': typeof ResearchRoute
   '/api/chat': typeof ApiChatRoute
   '/api/voice': typeof ApiVoiceRoute
@@ -59,21 +67,30 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/book': typeof BookRoute
+  '/forks': typeof ForksRoute
   '/research': typeof ResearchRoute
   '/api/chat': typeof ApiChatRoute
   '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/book' | '/research' | '/api/chat' | '/api/voice'
+  fullPaths: '/' | '/book' | '/forks' | '/research' | '/api/chat' | '/api/voice'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/book' | '/research' | '/api/chat' | '/api/voice'
-  id: '__root__' | '/' | '/book' | '/research' | '/api/chat' | '/api/voice'
+  to: '/' | '/book' | '/forks' | '/research' | '/api/chat' | '/api/voice'
+  id:
+    | '__root__'
+    | '/'
+    | '/book'
+    | '/forks'
+    | '/research'
+    | '/api/chat'
+    | '/api/voice'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BookRoute: typeof BookRoute
+  ForksRoute: typeof ForksRoute
   ResearchRoute: typeof ResearchRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiVoiceRoute: typeof ApiVoiceRoute
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/book'
       fullPath: '/book'
       preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forks': {
+      id: '/forks'
+      path: '/forks'
+      fullPath: '/forks'
+      preLoaderRoute: typeof ForksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/research': {
@@ -122,6 +146,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BookRoute: BookRoute,
+  ForksRoute: ForksRoute,
   ResearchRoute: ResearchRoute,
   ApiChatRoute: ApiChatRoute,
   ApiVoiceRoute: ApiVoiceRoute,

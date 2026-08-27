@@ -1,7 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { BookOpen, CornerDownLeft, GraduationCap, Loader2, Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  CornerDownLeft,
+  GraduationCap,
+  Loader2,
+  Sparkles,
+  Square,
+  Volume2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import portrait from "@/assets/pepys-portrait.jpg";
