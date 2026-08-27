@@ -23,6 +23,12 @@ export type SubjectState = {
   systemPrompt: string;
   drawnFrom: string[];
   passages: RetrievedEntry[];
+  curiosity: {
+    active: { label: string; strength: number; basis: string | null }[];
+    askedQuestionId: string | null;
+    askedQuestion: string | null;
+    awaitingQuestionId: string | null;
+  };
 };
 
 /**
@@ -182,5 +188,15 @@ ${
     systemPrompt,
     drawnFrom,
     passages,
+    curiosity: {
+      active: curiosity.active.map((c) => ({
+        label: c.label,
+        strength: c.strength,
+        basis: c.basis,
+      })),
+      askedQuestionId: curiosity.question?.id ?? null,
+      askedQuestion: curiosity.question?.question ?? null,
+      awaitingQuestionId: curiosity.awaiting?.id ?? null,
+    },
   };
 }
