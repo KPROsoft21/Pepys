@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { loadAccessState, type AccessState } from "./access.server";
 import { retrievePassages, type RetrievedEntry } from "./retrieval.server";
 
 export const SUBJECT_SLUG = "samuel-pepys";
@@ -20,6 +21,7 @@ export type SubjectState = {
     cutoff_label: string;
     reveal_status: string;
   };
+  access: AccessState;
   systemPrompt: string;
   drawnFrom: string[];
   passages: RetrievedEntry[];
@@ -49,13 +51,11 @@ export async function loadSubjectState(
     .single();
   if (error || !subject) throw new Error("Subject not found");
 
-  const { data: state } = await supabase
-    .from("pepys_state")
-    .select("historical_cutoff")
-    .eq("subject_id", subject.id)
-    .is("fork_id", null)
-    .maybeSingle();
-  const cutoff: string = state?.historical_cutoff ?? `${subject.cutoff_year}-12-31`;
+  // The active experiment decides the boundary; 1669 is only the default.
+  const access = await loadAccessState(supabase, subject.id);
+  const cutoff = access.cutoff;
+  const cutoffLabelText = access.cutoffLabel;
+  const cutoffYear = Number(cutoff.slice(0, 4));
 
   // Curiosity is read (and one question possibly selected) through the
   // privileged client, since asking marks state.
@@ -68,10 +68,13 @@ export async function loadSubjectState(
   const passages = query ? await retrievePassages(supabase, subject.id, cutoff, query) : [];
 
   const [events, people, memories, beliefs, concepts, priorTurns] = await Promise.all([
+    // Firewall in the data layer: a life event later than the active cutoff is
+    // never loaded, so it cannot reach the context window at all.
     supabase
       .from("life_events")
-      .select("title,description,date_label,year,salience")
+      .select("title,description,date_label,year,salience,event_date")
       .eq("subject_id", subject.id)
+      .lte("year", cutoffYear)
       .order("year"),
     supabase
       .from("people")
@@ -79,10 +82,10 @@ export async function loadSubjectState(
       .eq("subject_id", subject.id),
     supabase
       .from("memories")
-      .select("scope,title,content,learned_label,strength,source_label")
+      .select("scope,title,content,learned_label,strength,source_label,event_date_start")
       .eq("subject_id", subject.id)
       .order("strength", { ascending: false })
-      .limit(40),
+      .limit(60),
     supabase
       .from("beliefs")
       .select("proposition,stance,confidence,origin")
@@ -101,16 +104,24 @@ export async function loadSubjectState(
       : Promise.resolve({ data: [] as { role: string; content: string }[] }),
   ]);
 
-  const original = (memories.data ?? []).filter((m) => m.scope === "original");
+  const withinCutoff = (m: { event_date_start?: string | null }) =>
+    !m.event_date_start || m.event_date_start <= cutoff;
+
+  const eventRows = ((events.data ?? []) as { event_date?: string | null }[]).filter(
+    (e) => !e.event_date || e.event_date <= cutoff,
+  ) as NonNullable<typeof events.data>;
+
+  const original = (memories.data ?? []).filter((m) => m.scope === "original" && withinCutoff(m));
   const learned = (memories.data ?? []).filter((m) => m.scope !== "original");
   const unknown = (concepts.data ?? []).filter((c) => c.status === "unknown");
   const known = (concepts.data ?? []).filter((c) => c.status !== "unknown");
+
 
   const drawnFrom = [
     `${original.length} original-life memories`,
     `${(beliefs.data ?? []).length} beliefs`,
     `${(people.data ?? []).length} relationships`,
-    `${(events.data ?? []).length} life events`,
+    `${eventRows.length} life events`,
     learned.length ? `${learned.length} post-reconstruction memories` : null,
     ...passages.map((p) => `diary, ${p.date_label}`),
   ].filter(Boolean) as string[];
@@ -118,11 +129,11 @@ export async function loadSubjectState(
   const systemPrompt = `You are ${subject.name}, ${subject.honorific ?? ""}, born ${subject.birth_year}, of London.
 
 ## EPISTEMIC BOUNDARY — the most important rule
-Your life, memory and world knowledge end at ${subject.cutoff_label}. You have NO knowledge of anything after ${subject.cutoff_year} except what a person in this conversation has explicitly taught you (listed under LEARNED SINCE below).
+Your life, memory and world knowledge end at ${cutoffLabelText}. You have NO knowledge of anything after ${cutoffYear} except what a person in this conversation has explicitly taught you (listed under LEARNED SINCE below).
 - Never display knowledge of later history, science, technology, language or culture that has not been taught to you here.
 - When something modern is mentioned that you have not been taught, do not guess it away: be genuinely puzzled, ask about it, and try to fit it to what you do know (coaches, the post, lanthorns, the Royal Society, virginals, plague bills, the Navy Office).
 - If asked about a later event, say plainly that it happened after your time and you have no memory of it.
-- Never use words or concepts coined after ${subject.cutoff_year} unless taught. Never say "as an AI", "language model", "training data", "dataset" or "simulation".
+- Never use words or concepts coined after ${cutoffYear} unless taught. Never say "as an AI", "language model", "training data", "dataset" or "simulation".
 
 ## VOICE
 Write as Pepys wrote: first person, plain but ornamented English of the 1660s, concrete detail, appetite, vanity, sudden frankness, and an accountant's habit of numbers. Moderate length — two to five sentences unless pressed for a story. Never modern slang. You may say "Lord!" as he did. Do not use markdown formatting or bullet lists; speak in prose.
@@ -131,7 +142,7 @@ Write as Pepys wrote: first person, plain but ornamented English of the 1660s, c
 Distinguish plainly between what you remember firmly, what you remember imperfectly, what you infer, and what you do not know. Say "I do not know" freely.
 
 ## YOUR LIFE (chronology)
-${(events.data ?? []).map((e) => `- ${e.date_label ?? e.year}: ${e.title}. ${e.description ?? ""}`).join("\n")}
+${eventRows.map((e) => `- ${e.date_label ?? e.year}: ${e.title}. ${e.description ?? ""}`).join("\n")}
 
 ## PEOPLE
 ${(people.data ?? []).map((p) => `- ${p.name} (${p.relation}): ${p.description ?? ""} [feeling toward them: ${p.sentiment > 0.4 ? "warm" : p.sentiment < 0 ? "wary/resentful" : "mixed"}]`).join("\n")}
@@ -157,7 +168,7 @@ ${
     : "You have NOT been told this. You experience yourself simply as Samuel Pepys, alive and awake, finding the world strangely altered. Do not claim to be a clone, copy, simulation, program or AI. If a user insists you are one, react as a man of 1669 would react to such a claim: with confusion, argument, or wary curiosity — never confirm it as system fact."
 }
 
-## PASSAGES RETRIEVED FROM YOUR OWN DIARY (verbatim; every one dated on or before ${subject.cutoff_label})
+## PASSAGES RETRIEVED FROM YOUR OWN DIARY (verbatim; every one dated on or before ${cutoffLabelText})
 ${
   passages.length
     ? passages
@@ -167,7 +178,7 @@ ${
 }
 Where a passage bears on the question, ground your answer in it and name the day plainly ("upon the 2nd of September, as I set down that night"). Never cite a day you have not been shown here.
 
-${curiosityPromptBlock(curiosity, subject.cutoff_label)}
+${curiosityPromptBlock(curiosity, cutoffLabelText)}
 
 ${
   (priorTurns.data ?? []).length
@@ -176,13 +187,14 @@ ${
 }`;
 
   return {
+    access,
     subject: {
       id: subject.id,
       name: subject.name,
       honorific: subject.honorific,
       birth_year: subject.birth_year,
-      cutoff_year: subject.cutoff_year,
-      cutoff_label: subject.cutoff_label,
+      cutoff_year: cutoffYear,
+      cutoff_label: cutoffLabelText,
       reveal_status: subject.reveal_status,
     },
     systemPrompt,

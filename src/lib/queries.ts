@@ -157,3 +157,165 @@ export const curiosityQuery = {
     };
   },
 };
+
+export type Instrumentation = {
+  state: {
+    label: string | null;
+    historical_cutoff: string;
+    identity_state: string;
+    current_simulated_time: string | null;
+  } | null;
+  denials: {
+    id: string;
+    requested: string;
+    reason: string;
+    cutoff: string;
+    blocked_count: number;
+    created_at: string;
+  }[];
+  leaks: {
+    id: string;
+    detected_concept: string;
+    response: string;
+    severity: string;
+    cutoff: string;
+    created_at: string;
+  }[];
+  revisions: {
+    id: string;
+    confidence_before: number | null;
+    confidence_after: number;
+    stance_before: string | null;
+    stance_after: string;
+    change_reason: string;
+    evidence: string | null;
+    created_at: string;
+    beliefs: { proposition: string } | null;
+  }[];
+  traits: {
+    id: string;
+    trait: string;
+    value: number;
+    confidence: number;
+    evidence_note: string | null;
+    period_start: string | null;
+    period_end: string | null;
+  }[];
+  emotion: { dimensions: Record<string, number>; trigger: string | null; created_at: string } | null;
+  contradictions: {
+    id: string;
+    held_proposition: string;
+    new_claim: string;
+    strength: number;
+    status: string;
+    resolution: string | null;
+    created_at: string;
+  }[];
+  counts: {
+    interactions: number;
+    diaryEntries: number;
+    visitors: number;
+    provenance: number;
+  };
+};
+
+export const instrumentationQuery = {
+  queryKey: ["instrumentation"],
+  queryFn: async (): Promise<Instrumentation> => {
+    const { data: subject } = await supabase
+      .from("subjects")
+      .select("id")
+      .eq("slug", SUBJECT_SLUG)
+      .single();
+    if (!subject) throw new Error("Subject not found");
+    const id = subject.id;
+
+    const [
+      state,
+      denials,
+      leaks,
+      revisions,
+      traits,
+      emotion,
+      contradictions,
+      interactions,
+      entries,
+      visitors,
+      provenance,
+    ] = await Promise.all([
+      supabase
+        .from("pepys_state")
+        .select("label,historical_cutoff,identity_state,current_simulated_time")
+        .eq("subject_id", id)
+        .is("fork_id", null)
+        .maybeSingle(),
+      supabase
+        .from("access_denials")
+        .select("id,requested,reason,cutoff,blocked_count,created_at")
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("leakage_events")
+        .select("id,detected_concept,response,severity,cutoff,created_at")
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("belief_history")
+        .select(
+          "id,confidence_before,confidence_after,stance_before,stance_after,change_reason,evidence,created_at,beliefs(proposition)",
+        )
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      supabase
+        .from("personality_traits")
+        .select("id,trait,value,confidence,evidence_note,period_start,period_end")
+        .eq("subject_id", id)
+        .order("value", { ascending: false }),
+      supabase
+        .from("emotional_states")
+        .select("dimensions,trigger,created_at")
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("contradictions")
+        .select("id,held_proposition,new_claim,strength,status,resolution,created_at")
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("interactions")
+        .select("id", { count: "exact", head: true })
+        .eq("subject_id", id),
+      supabase
+        .from("diary_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("subject_id", id),
+      supabase.from("relationships").select("id", { count: "exact", head: true }).eq("subject_id", id),
+      supabase
+        .from("provenance_records")
+        .select("id", { count: "exact", head: true })
+        .eq("subject_id", id),
+    ]);
+
+    return {
+      state: (state.data ?? null) as Instrumentation["state"],
+      denials: (denials.data ?? []) as Instrumentation["denials"],
+      leaks: (leaks.data ?? []) as Instrumentation["leaks"],
+      revisions: (revisions.data ?? []) as unknown as Instrumentation["revisions"],
+      traits: (traits.data ?? []) as Instrumentation["traits"],
+      emotion: (emotion.data ?? null) as Instrumentation["emotion"],
+      contradictions: (contradictions.data ?? []) as Instrumentation["contradictions"],
+      counts: {
+        interactions: interactions.count ?? 0,
+        diaryEntries: entries.count ?? 0,
+        visitors: visitors.count ?? 0,
+        provenance: provenance.count ?? 0,
+      },
+    };
+  },
+};

@@ -6,6 +6,8 @@ const ConsolidateInput = z.object({
   userMessage: z.string().min(1),
   reply: z.string().min(1),
   visitor: z.string().min(1).max(60),
+  visitorKey: z.string().min(4).max(80).nullable().optional(),
+  interactionId: z.string().uuid().nullable().optional(),
 });
 
 const RevealInput = z.object({ revealed: z.boolean() });
