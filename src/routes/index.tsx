@@ -139,6 +139,16 @@ function Encounter() {
         throw new Error(detail || "The reconstruction did not answer.");
       }
 
+      let citedDays: string[] = [];
+      try {
+        const raw = res.headers.get("x-pepys-passages");
+        if (raw) {
+          citedDays = (JSON.parse(raw) as { date: string }[]).map((p) => `diary, ${p.date}`);
+        }
+      } catch {
+        citedDays = [];
+      }
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let full = "";
@@ -160,7 +170,7 @@ function Encounter() {
       });
       setConversationId(result.conversationId);
       const evidence: Evidence = {
-        drawnFrom: result.drawnFrom,
+        drawnFrom: [...citedDays, ...result.drawnFrom.filter((d) => !citedDays.includes(d))],
         frontier: result.frontier,
         updates: result.updates,
       };
