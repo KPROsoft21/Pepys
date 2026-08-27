@@ -64,11 +64,11 @@ export async function ingestYear(
 
   const { data: state } = await supabase
     .from("pepys_state")
-    .select("id,cutoff_date")
+    .select("id,historical_cutoff")
     .eq("subject_id", subject.id)
     .is("fork_id", null)
     .maybeSingle();
-  const cutoff: string = state?.cutoff_date ?? `${subject.cutoff_year}-12-31`;
+  const cutoff: string = state?.historical_cutoff ?? `${subject.cutoff_year}-12-31`;
 
   const parsed: ParsedEntry[] = parseVolume(await fetchVolume(volumeId), year);
 
