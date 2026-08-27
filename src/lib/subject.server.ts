@@ -45,11 +45,19 @@ export async function loadSubjectState(
 
   const { data: state } = await supabase
     .from("pepys_state")
-    .select("cutoff_date")
+    .select("historical_cutoff")
     .eq("subject_id", subject.id)
     .is("fork_id", null)
     .maybeSingle();
-  const cutoff: string = state?.cutoff_date ?? `${subject.cutoff_year}-12-31`;
+  const cutoff: string = state?.historical_cutoff ?? `${subject.cutoff_year}-12-31`;
+
+  // Curiosity is read (and one question possibly selected) through the
+  // privileged client, since asking marks state.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { buildCuriosityContext, curiosityPromptBlock } = await import("./curiosity.server");
+  const curiosity = await buildCuriosityContext(supabaseAdmin, subject.id, conversationId, {
+    voice: Boolean(query),
+  });
 
   const passages = query ? await retrievePassages(supabase, subject.id, cutoff, query) : [];
 
