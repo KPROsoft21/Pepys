@@ -113,6 +113,7 @@ export function parseVolume(raw: string, year: number): ParsedEntry[] {
   let current: { month: number; day: number; buf: string[] } | null = null;
   let bracketDepth = 0;
   let sawFirstEntry = false;
+  let openMonth: number | null = null;
 
   const flush = () => {
     if (!current) return;
