@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+import { publicCounts } from "./counts.functions";
+
 import {
   SUBJECT_SLUG,
   type Belief,
