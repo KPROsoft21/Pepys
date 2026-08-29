@@ -84,18 +84,21 @@ export async function loadSubjectState(
       .eq("subject_id", subject.id),
     supabase
       .from("memories")
-      .select("scope,title,content,learned_label,strength,source_label,event_date_start")
+      .select(
+        "scope,title,content,learned_label,strength,source_label,event_date_start,visibility,owner_visitor_key",
+      )
       .eq("subject_id", subject.id)
       .order("strength", { ascending: false })
-      .limit(60),
+      .limit(120),
     supabase
       .from("beliefs")
       .select("proposition,stance,confidence,origin")
       .eq("subject_id", subject.id),
     supabase
       .from("concepts")
-      .select("name,status,understanding,taught_by")
+      .select("name,status,understanding,taught_by,visibility,owner_visitor_key")
       .eq("subject_id", subject.id),
+
     conversationId
       ? supabase
           .from("messages")
