@@ -116,10 +116,24 @@ export async function loadSubjectState(
     (e) => !e.event_date || e.event_date <= cutoff,
   ) as NonNullable<typeof events.data>;
 
-  const original = (memories.data ?? []).filter((m) => m.scope === "original" && withinCutoff(m));
-  const learned = (memories.data ?? []).filter((m) => m.scope !== "original");
-  const unknown = (concepts.data ?? []).filter((c) => c.status === "unknown");
-  const known = (concepts.data ?? []).filter((c) => c.status !== "unknown");
+  // Privacy firewall: anything taught privately belongs to the visitor who
+  // taught it. A different visitor's key (or none) never sees those rows.
+  const visibleToVisitor = (row: {
+    visibility?: string | null;
+    owner_visitor_key?: string | null;
+  }) =>
+    !row.owner_visitor_key
+      ? row.visibility !== "private"
+      : Boolean(visitorKey) && row.owner_visitor_key === visitorKey;
+
+  const memoryRows = (memories.data ?? []).filter(visibleToVisitor).slice(0, 60);
+  const conceptRows = (concepts.data ?? []).filter(visibleToVisitor);
+
+  const original = memoryRows.filter((m) => m.scope === "original" && withinCutoff(m));
+  const learned = memoryRows.filter((m) => m.scope !== "original");
+  const unknown = conceptRows.filter((c) => c.status === "unknown");
+  const known = conceptRows.filter((c) => c.status !== "unknown");
+
 
 
   const drawnFrom = [
