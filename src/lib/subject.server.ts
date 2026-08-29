@@ -43,6 +43,8 @@ export async function loadSubjectState(
   conversationId: string | null,
   /** The visitor's current message, used to retrieve diary passages. */
   query: string = "",
+  /** Anonymous visitor identity; private memories are scoped to it. */
+  visitorKey: string | null = null,
 ): Promise<SubjectState> {
   const { data: subject, error } = await supabase
     .from("subjects")
