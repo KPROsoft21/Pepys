@@ -198,38 +198,63 @@ function Encounter() {
         prev.map((t) => (t.id === replyId ? { ...t, content: full, pending: false } : t)),
       );
 
-      const result = await runConsolidate({
-        data: {
-          conversationId,
-          userMessage: message,
-          reply: full,
-          visitor: visitor || "a visitor",
-          visitorKey,
-          interactionId,
-        },
-      });
-      setConversationId(result.conversationId);
-      const evidence: Evidence = {
-        drawnFrom: [
-          ...citedDays,
-          ...result.drawnFrom.filter((d) => !citedDays.includes(d)),
-          ...(firewallNote ? [firewallNote] : []),
-        ],
-        frontier: result.frontier,
-        updates: result.updates,
-      };
-      setTurns((prev) => prev.map((t) => (t.id === replyId ? { ...t, evidence } : t)));
-      if (result.updates.length) {
-        void queryClient.invalidateQueries({ queryKey: ["dossier"] });
-        void queryClient.invalidateQueries({ queryKey: ["curiosity"] });
+      // Consolidation writes memory and evidence. If it fails, the reply he
+      // already gave is kept on screen — only the evidence chain is missing.
+      try {
+        const result = await runConsolidate({
+          data: {
+            conversationId,
+            userMessage: message,
+            reply: full,
+            visitor: visitor || "a visitor",
+            visitorKey,
+            interactionId,
+          },
+        });
+        setConversationId(result.conversationId);
+        const evidence: Evidence = {
+          drawnFrom: [
+            ...citedDays,
+            ...result.drawnFrom.filter((d) => !citedDays.includes(d)),
+            ...(firewallNote ? [firewallNote] : []),
+          ],
+          frontier: result.frontier,
+          updates: result.updates,
+        };
+        setTurns((prev) => prev.map((t) => (t.id === replyId ? { ...t, evidence } : t)));
+        if (result.updates.length) {
+          void queryClient.invalidateQueries({ queryKey: ["dossier"] });
+          void queryClient.invalidateQueries({ queryKey: ["curiosity"] });
+        }
+      } catch (err) {
+        const evidence: Evidence = {
+          drawnFrom: [...citedDays, ...(firewallNote ? [firewallNote] : [])],
+          frontier: null,
+          updates: [],
+        };
+        setTurns((prev) => prev.map((t) => (t.id === replyId ? { ...t, evidence } : t)));
+        setError(
+          `His answer stands, but it was not written into his memory: ${
+            err instanceof Error ? err.message : "consolidation failed"
+          }`,
+        );
       }
     } catch (err) {
-      setTurns((prev) => prev.filter((t) => t.id !== replyId));
+      // The stream itself failed. Keep whatever he had already said, and give
+      // the visitor their message back so nothing typed is lost.
+      setTurns((prev) =>
+        prev.flatMap((t) => {
+          if (t.id !== replyId) return [t];
+          return t.content ? [{ ...t, pending: false }] : [];
+        }),
+      );
+      setDraft((current) => (current ? current : message));
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setTeaching(false);
       setBusy(false);
     }
+
   }
 
   const unknownCount = data?.concepts.filter((c) => c.status === "unknown").length ?? 0;
