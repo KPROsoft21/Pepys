@@ -1826,7 +1826,10 @@ export type Database = {
     }
     Functions: {
       count_embedded_entries: { Args: never; Returns: number }
+      count_interactions: { Args: { _subject_id: string }; Returns: number }
+      count_messages: { Args: never; Returns: number }
       count_pending_embedding_entries: { Args: never; Returns: number }
+      count_visitors: { Args: { _subject_id: string }; Returns: number }
       hybrid_search_diary: {
         Args: {
           _cutoff: string
