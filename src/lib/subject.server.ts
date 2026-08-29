@@ -100,7 +100,7 @@ export async function loadSubjectState(
       .eq("subject_id", subject.id),
 
     conversationId
-      ? supabase
+      ? supabaseAdmin
           .from("messages")
           .select("role,content")
           .eq("conversation_id", conversationId)

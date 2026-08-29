@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+import { publicCounts } from "./counts.functions";
+
 import {
   SUBJECT_SLUG,
   type Belief,
@@ -61,7 +63,7 @@ export const dossierQuery = {
           .eq("subject_id", id)
           .order("created_at", { ascending: false })
           .limit(60),
-        supabase.from("messages").select("id", { count: "exact", head: true }),
+        publicCounts({ data: { subjectId: id } }),
       ]);
 
     return {
@@ -73,7 +75,7 @@ export const dossierQuery = {
       concepts: (concepts.data ?? []) as Concept[],
       sources: (sources.data ?? []) as SourceRecord[],
       log: (log.data ?? []) as LearningEntry[],
-      messageCount: messages.count ?? 0,
+      messageCount: messages.messages,
     };
   },
 };
@@ -238,10 +240,9 @@ export const instrumentationQuery = {
       traits,
       emotion,
       contradictions,
-      interactions,
       entries,
-      visitors,
       provenance,
+      counts,
     ] = await Promise.all([
       supabase
         .from("pepys_state")
@@ -288,18 +289,14 @@ export const instrumentationQuery = {
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
-        .from("interactions")
-        .select("id", { count: "exact", head: true })
-        .eq("subject_id", id),
-      supabase
         .from("diary_entries")
         .select("id", { count: "exact", head: true })
         .eq("subject_id", id),
-      supabase.from("relationships").select("id", { count: "exact", head: true }).eq("subject_id", id),
       supabase
         .from("provenance_records")
         .select("id", { count: "exact", head: true })
         .eq("subject_id", id),
+      publicCounts({ data: { subjectId: id } }),
     ]);
 
     return {
@@ -311,9 +308,9 @@ export const instrumentationQuery = {
       emotion: (emotion.data ?? null) as Instrumentation["emotion"],
       contradictions: (contradictions.data ?? []) as Instrumentation["contradictions"],
       counts: {
-        interactions: interactions.count ?? 0,
+        interactions: counts.interactions,
         diaryEntries: entries.count ?? 0,
-        visitors: visitors.count ?? 0,
+        visitors: counts.visitors,
         provenance: provenance.count ?? 0,
       },
     };
