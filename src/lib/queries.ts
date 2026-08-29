@@ -238,10 +238,9 @@ export const instrumentationQuery = {
       traits,
       emotion,
       contradictions,
-      interactions,
       entries,
-      visitors,
       provenance,
+      counts,
     ] = await Promise.all([
       supabase
         .from("pepys_state")
@@ -288,18 +287,14 @@ export const instrumentationQuery = {
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
-        .from("interactions")
-        .select("id", { count: "exact", head: true })
-        .eq("subject_id", id),
-      supabase
         .from("diary_entries")
         .select("id", { count: "exact", head: true })
         .eq("subject_id", id),
-      supabase.from("relationships").select("id", { count: "exact", head: true }).eq("subject_id", id),
       supabase
         .from("provenance_records")
         .select("id", { count: "exact", head: true })
         .eq("subject_id", id),
+      publicCounts({ data: { subjectId: id } }),
     ]);
 
     return {
@@ -311,9 +306,9 @@ export const instrumentationQuery = {
       emotion: (emotion.data ?? null) as Instrumentation["emotion"],
       contradictions: (contradictions.data ?? []) as Instrumentation["contradictions"],
       counts: {
-        interactions: interactions.count ?? 0,
+        interactions: counts.interactions,
         diaryEntries: entries.count ?? 0,
-        visitors: visitors.count ?? 0,
+        visitors: counts.visitors,
         provenance: provenance.count ?? 0,
       },
     };
