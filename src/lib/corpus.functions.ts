@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
 import type { CorpusStatus, IngestResult } from "./corpus.server";
 
 const YearInput = z.object({ year: z.number().int().min(1660).max(1669) });
@@ -14,6 +16,7 @@ export const getCorpusStatus = createServerFn({ method: "GET" }).handler(
 );
 
 export const ingestCorpusYear = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => YearInput.parse(input))
   .handler(async ({ data }): Promise<IngestResult> => {
     const { ingestYear } = await import("./corpus.server");
@@ -28,6 +31,7 @@ export const getEmbeddingStatus = createServerFn({ method: "GET" }).handler(asyn
 });
 
 export const embedCorpusBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z.object({ entries: z.number().int().min(1).max(40).default(12) }).parse(input ?? {}),
   )

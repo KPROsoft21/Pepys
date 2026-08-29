@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { useRef, useState } from "react";
 
+import { useResearchSession } from "@/components/pepys/ResearchAuth";
 import {
   embedCorpusBatch,
   getCorpusStatus,
@@ -12,6 +13,7 @@ import {
 
 export function CorpusPanel() {
   const queryClient = useQueryClient();
+  const session = useResearchSession();
   const fetchStatus = useServerFn(getCorpusStatus);
   const runIngest = useServerFn(ingestCorpusYear);
 
@@ -104,7 +106,7 @@ export function CorpusPanel() {
             <button
               key={y.year}
               onClick={() => ingest.mutate(y.year)}
-              disabled={ingest.isPending}
+              disabled={ingest.isPending || !session.signedIn}
               title={`Re-ingest ${y.year} from the source volume`}
               className="rounded-md border border-border bg-secondary/60 px-2 py-1 font-mono text-[11px] transition-colors hover:border-seal disabled:opacity-50"
             >
@@ -124,7 +126,7 @@ export function CorpusPanel() {
               <button
                 key={year}
                 onClick={() => ingest.mutate(year)}
-                disabled={ingest.isPending}
+                disabled={ingest.isPending || !session.signedIn}
                 className="rounded-md bg-seal px-2.5 py-1.5 font-mono text-[11px] text-seal-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {ingest.isPending && ingest.variables === year ? `${year}…` : `Ingest ${year}`}
@@ -164,7 +166,7 @@ export function CorpusPanel() {
         <div className="mt-3 flex items-center gap-3">
           <button
             onClick={() => (indexing ? (stop.current = true) : buildIndex())}
-            disabled={!embed || (embed.done && !indexing)}
+            disabled={!embed || !session.signedIn || (embed.done && !indexing)}
             className="rounded-md bg-seal px-2.5 py-1.5 font-mono text-[11px] text-seal-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {indexing ? "Pause indexing" : embed?.done ? "Index complete" : "Build semantic index"}

@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
 const ConsolidateInput = z.object({
   conversationId: z.string().nullable(),
   userMessage: z.string().min(1),
@@ -20,6 +22,7 @@ export const consolidate = createServerFn({ method: "POST" })
   });
 
 export const setRevealStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RevealInput.parse(input))
   .handler(async ({ data }) => {
     const { applyRevealStatus } = await import("./consolidate.server");

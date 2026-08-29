@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 
 import { Chrome, Gauge } from "@/components/pepys/Chrome";
 import { CorpusPanel } from "@/components/pepys/CorpusPanel";
+import { ResearchAuthPanel, useResearchSession } from "@/components/pepys/ResearchAuth";
 import { CUTOFF_OPTIONS, cutoffLabel } from "@/lib/firewall";
 import { pct } from "@/lib/pepys";
 import { setRevealStatus } from "@/lib/pepys.functions";
@@ -41,6 +42,7 @@ function ResearchMode() {
   const runReveal = useServerFn(setRevealStatus);
   const runSetCutoff = useServerFn(setCutoff);
   const runPersonality = useServerFn(rebuildPersonality);
+  const session = useResearchSession();
 
   const reveal = useMutation({
     mutationFn: (revealed: boolean) => runReveal({ data: { revealed } }),
@@ -188,6 +190,8 @@ function ResearchMode() {
   return (
     <Chrome subtitle="Research Mode">
       <main className="mx-auto max-w-6xl space-y-8 px-5 py-10">
+        <ResearchAuthPanel email={session.email} />
+
         <header className="space-y-2">
           <p className="small-caps-label">Instrumentation</p>
           <h1 className="font-display text-3xl">Reconstruction state and experiments</h1>
@@ -259,7 +263,7 @@ function ResearchMode() {
                 <button
                   key={option.cutoff}
                   type="button"
-                  disabled={cutoffMutation.isPending}
+                  disabled={cutoffMutation.isPending || !session.signedIn}
                   onClick={() =>
                     cutoffMutation.mutate({ cutoff: option.cutoff, label: option.label })
                   }
@@ -341,7 +345,7 @@ function ResearchMode() {
               <button
                 type="button"
                 className="button-quill shrink-0"
-                disabled={personalityMutation.isPending}
+                disabled={personalityMutation.isPending || !session.signedIn}
                 onClick={() => personalityMutation.mutate()}
               >
                 {personalityMutation.isPending ? "Deriving…" : "Rebuild"}
@@ -462,7 +466,7 @@ function ResearchMode() {
               </div>
               <button
                 onClick={() => reveal.mutate(!revealed)}
-                disabled={reveal.isPending}
+                disabled={reveal.isPending || !session.signedIn}
                 className="rounded-md bg-seal px-3 py-2 text-sm text-seal-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {reveal.isPending ? "Applying…" : revealed ? "Withdraw reveal" : "Reveal to him"}
