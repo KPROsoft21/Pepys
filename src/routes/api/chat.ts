@@ -35,7 +35,12 @@ export const Route = createFileRoute("/api/chat")({
         if (message.length > 4000) return new Response("Message too long", { status: 413 });
 
         const supabase = serverSupabase();
-        const state = await loadSubjectState(supabase, body.conversationId ?? null, message);
+        const state = await loadSubjectState(
+          supabase,
+          body.conversationId ?? null,
+          message,
+          body.visitorKey ?? null,
+        );
 
         // Historical firewall accounting: what the corpus holds beyond the
         // active cutoff and therefore refused to hand over.
