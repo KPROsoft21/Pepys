@@ -63,7 +63,7 @@ export const dossierQuery = {
           .eq("subject_id", id)
           .order("created_at", { ascending: false })
           .limit(60),
-        supabase.from("messages").select("id", { count: "exact", head: true }),
+        publicCounts({ data: { subjectId: id } }),
       ]);
 
     return {
@@ -75,7 +75,7 @@ export const dossierQuery = {
       concepts: (concepts.data ?? []) as Concept[],
       sources: (sources.data ?? []) as SourceRecord[],
       log: (log.data ?? []) as LearningEntry[],
-      messageCount: messages.count ?? 0,
+      messageCount: messages.messages,
     };
   },
 };
