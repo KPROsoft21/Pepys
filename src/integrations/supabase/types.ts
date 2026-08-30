@@ -1820,6 +1820,196 @@ export type Database = {
         }
         Relationships: []
       }
+      validation_runs: {
+        Row: {
+          completed_at: string | null
+          corpus_version: string | null
+          critical_passed: number
+          critical_total: number
+          environment: string
+          historical_cutoff: string | null
+          id: string
+          log: Json
+          model: string | null
+          model_version: string | null
+          notes: string | null
+          overall_status: string
+          pepys_instance_id: string | null
+          prompt_version: string | null
+          run_number: number | null
+          started_at: string
+          subject_id: string
+          suite: string
+          tests_passed: number
+          tests_total: number
+          verdict: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          corpus_version?: string | null
+          critical_passed?: number
+          critical_total?: number
+          environment?: string
+          historical_cutoff?: string | null
+          id?: string
+          log?: Json
+          model?: string | null
+          model_version?: string | null
+          notes?: string | null
+          overall_status?: string
+          pepys_instance_id?: string | null
+          prompt_version?: string | null
+          run_number?: number | null
+          started_at?: string
+          subject_id: string
+          suite?: string
+          tests_passed?: number
+          tests_total?: number
+          verdict?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          corpus_version?: string | null
+          critical_passed?: number
+          critical_total?: number
+          environment?: string
+          historical_cutoff?: string | null
+          id?: string
+          log?: Json
+          model?: string | null
+          model_version?: string | null
+          notes?: string | null
+          overall_status?: string
+          pepys_instance_id?: string | null
+          prompt_version?: string | null
+          run_number?: number | null
+          started_at?: string
+          subject_id?: string
+          suite?: string
+          tests_passed?: number
+          tests_total?: number
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_runs_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      validation_steps: {
+        Row: {
+          actual: string | null
+          created_at: string
+          evidence: Json
+          evidence_reference: string | null
+          evidence_type: string | null
+          expected: string | null
+          id: string
+          name: string
+          run_id: string
+          status: string
+          step_number: number
+          test_id: string
+        }
+        Insert: {
+          actual?: string | null
+          created_at?: string
+          evidence?: Json
+          evidence_reference?: string | null
+          evidence_type?: string | null
+          expected?: string | null
+          id?: string
+          name: string
+          run_id: string
+          status?: string
+          step_number: number
+          test_id: string
+        }
+        Update: {
+          actual?: string | null
+          created_at?: string
+          evidence?: Json
+          evidence_reference?: string | null
+          evidence_type?: string | null
+          expected?: string | null
+          id?: string
+          name?: string
+          run_id?: string
+          status?: string
+          step_number?: number
+          test_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "validation_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "validation_steps_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "validation_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      validation_tests: {
+        Row: {
+          completed_at: string | null
+          critical: boolean
+          error: string | null
+          evidence: Json
+          id: string
+          run_id: string
+          started_at: string
+          status: string
+          subsystem: string | null
+          test_key: string
+          test_name: string
+        }
+        Insert: {
+          completed_at?: string | null
+          critical?: boolean
+          error?: string | null
+          evidence?: Json
+          id?: string
+          run_id: string
+          started_at?: string
+          status?: string
+          subsystem?: string | null
+          test_key: string
+          test_name: string
+        }
+        Update: {
+          completed_at?: string | null
+          critical?: boolean
+          error?: string | null
+          evidence?: Json
+          id?: string
+          run_id?: string
+          started_at?: string
+          status?: string
+          subsystem?: string | null
+          test_key?: string
+          test_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_tests_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "validation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
